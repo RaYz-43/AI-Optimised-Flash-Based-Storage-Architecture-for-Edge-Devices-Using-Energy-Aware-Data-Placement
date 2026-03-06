@@ -59,6 +59,17 @@ st.markdown(
         font-family: 'Space Grotesk', sans-serif;
     }
 
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+        padding: 0.35rem 0.55rem;
+    }
+
     .hero-shell {
         background: linear-gradient(135deg, rgba(255, 250, 241, 0.96), rgba(255, 244, 230, 0.92));
         border: 1px solid rgba(194, 65, 12, 0.15);
@@ -354,65 +365,59 @@ st.markdown(
 overview_col, note_col = st.columns([1.3, 0.9])
 
 with overview_col:
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Executive Summary")
-    st.write(
-        "Edge devices run AI inference with tight power and storage limits. This model shows that smarter data placement can cut access cost by prioritizing hot blocks for fast flash and relegating colder data to denser tiers."
-    )
-    st.write(
-        "Both strategies use the same generated workload, so any performance gap comes from placement quality rather than differences in the input data."
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("Executive Summary")
+        st.write(
+            "Edge devices run AI inference with tight power and storage limits. This model shows that smarter data placement can cut access cost by prioritizing hot blocks for fast flash and relegating colder data to denser tiers."
+        )
+        st.write(
+            "Both strategies use the same generated workload, so any performance gap comes from placement quality rather than differences in the input data."
+        )
 
 with note_col:
-    st.markdown('<div class="note-card">', unsafe_allow_html=True)
-    st.subheader("Talk Track")
-    st.markdown(
-        """
+    with st.container(border=True):
+        st.subheader("Talk Track")
+        st.markdown(
+            """
 1. Start with the problem: edge AI has limited flash storage, power budget, and memory bandwidth.
 2. Explain the baseline: random placement ignores how often a block is reused or how write-heavy it is.
 3. Explain the AI-inspired policy: it scores blocks by access frequency, write behavior, and temporal reuse.
 4. Close on impact: smarter placement lowers latency and energy while raising throughput under the same workload.
 """
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+        )
 
 comparison_col, impact_col = st.columns([1.05, 0.95])
 
 with comparison_col:
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Metric Comparison")
-    st.table(to_rows(baseline, optimized))
-    st.caption("Raw metrics for the same synthetic workload under both placement strategies.")
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("Metric Comparison")
+        st.table(to_rows(baseline, optimized))
+        st.caption("Raw metrics for the same synthetic workload under both placement strategies.")
 
 with impact_col:
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Improvement Overview")
-    st.bar_chart(to_improvement_dataframe(latency_gain, energy_gain, wear_gain, throughput_gain), color="#c2410c")
-    st.caption("Positive percentages show the relative benefit of the AI-aware placement policy.")
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("Improvement Overview")
+        st.bar_chart(to_improvement_dataframe(latency_gain, energy_gain, wear_gain, throughput_gain), color="#c2410c")
+        st.caption("Positive percentages show the relative benefit of the AI-aware placement policy.")
 
 closing_col, methodology_col = st.columns(2)
 
 with closing_col:
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Project Story")
-    st.write(
-        "This demo models an energy-aware flash architecture for edge devices. The main idea is simple: when storage decisions understand workload behavior, the system spends less time and energy fetching important data."
-    )
-    st.write(
-        "That matters for video analytics, smart sensors, drones, and other edge AI systems where small efficiency gains can directly improve responsiveness and battery life."
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("Project Story")
+        st.write(
+            "This demo models an energy-aware flash architecture for edge devices. The main idea is simple: when storage decisions understand workload behavior, the system spends less time and energy fetching important data."
+        )
+        st.write(
+            "That matters for video analytics, smart sensors, drones, and other edge AI systems where small efficiency gains can directly improve responsiveness and battery life."
+        )
 
 with methodology_col:
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Methodology")
-    st.write(
-        "The simulator creates synthetic workload blocks, evaluates a random baseline, and then applies an AI-inspired placement policy using the same inputs. This keeps the comparison controlled and easy to explain in a live demo."
-    )
-    st.write(
-        "Hot, reusable blocks tend to move toward faster flash zones, while colder data is assigned to denser zones that trade a little speed for capacity efficiency."
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("Methodology")
+        st.write(
+            "The simulator creates synthetic workload blocks, evaluates a random baseline, and then applies an AI-inspired placement policy using the same inputs. This keeps the comparison controlled and easy to explain in a live demo."
+        )
+        st.write(
+            "Hot, reusable blocks tend to move toward faster flash zones, while colder data is assigned to denser zones that trade a little speed for capacity efficiency."
+        )
