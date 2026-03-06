@@ -1,0 +1,27 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="720" fill="#0F172A"/>
+  <rect x="40" y="40" width="1120" height="640" rx="24" fill="#111827" stroke="#334155" stroke-width="2"/>
+  <text x="80" y="105" fill="#E2E8F0" font-family="Consolas, 'Courier New', monospace" font-size="34" font-weight="700">AI-Optimised Flash Storage for Edge AI</text>
+  <text x="80" y="145" fill="#94A3B8" font-family="Consolas, 'Courier New', monospace" font-size="20">Simulation preview • baseline vs AI-aware placement</text>
+
+  <rect x="80" y="185" width="500" height="210" rx="18" fill="#1E293B" stroke="#475569"/>
+  <text x="110" y="230" fill="#F8FAFC" font-family="Consolas, 'Courier New', monospace" font-size="28" font-weight="700">Baseline</text>
+  <text x="110" y="275" fill="#CBD5E1" font-family="Consolas, 'Courier New', monospace" font-size="22">Latency:    1.1676 ms</text>
+  <text x="110" y="315" fill="#CBD5E1" font-family="Consolas, 'Courier New', monospace" font-size="22">Energy:     1.2623 mJ/op</text>
+  <text x="110" y="355" fill="#CBD5E1" font-family="Consolas, 'Courier New', monospace" font-size="22">Throughput: 856.46 ops/s</text>
+
+  <rect x="620" y="185" width="500" height="210" rx="18" fill="#052E2B" stroke="#10B981"/>
+  <text x="650" y="230" fill="#ECFDF5" font-family="Consolas, 'Courier New', monospace" font-size="28" font-weight="700">AI-Optimized</text>
+  <text x="650" y="275" fill="#D1FAE5" font-family="Consolas, 'Courier New', monospace" font-size="22">Latency:    1.0222 ms</text>
+  <text x="650" y="315" fill="#D1FAE5" font-family="Consolas, 'Courier New', monospace" font-size="22">Energy:     1.1156 mJ/op</text>
+  <text x="650" y="355" fill="#D1FAE5" font-family="Consolas, 'Courier New', monospace" font-size="22">Throughput: 978.31 ops/s</text>
+
+  <rect x="80" y="440" width="1040" height="180" rx="18" fill="#0B1220" stroke="#334155"/>
+  <text x="110" y="490" fill="#F8FAFC" font-family="Consolas, 'Courier New', monospace" font-size="28" font-weight="700">Relative improvement</text>
+  <text x="110" y="535" fill="#22C55E" font-family="Consolas, 'Courier New', monospace" font-size="24">Latency reduction:   12.46%</text>
+  <text x="110" y="575" fill="#22C55E" font-family="Consolas, 'Courier New', monospace" font-size="24">Energy reduction:    11.62%</text>
+  <text x="560" y="535" fill="#22C55E" font-family="Consolas, 'Courier New', monospace" font-size="24">Throughput increase: 14.23%</text>
+  <text x="560" y="575" fill="#22C55E" font-family="Consolas, 'Courier New', monospace" font-size="24">Wear reduction:      0.57%</text>
+
+  <text x="80" y="665" fill="#64748B" font-family="Consolas, 'Courier New', monospace" font-size="18">Generated from the local simulation output for README preview.</text>
+</svg>
