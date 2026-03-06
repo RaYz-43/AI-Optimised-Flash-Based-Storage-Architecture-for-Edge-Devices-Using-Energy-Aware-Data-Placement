@@ -4,6 +4,11 @@ A portfolio-ready Python simulation that demonstrates how AI-aware data placemen
 
 ![Project preview](assets/project-preview.svg)
 
+## Demo options
+
+- Terminal mode for quick verification
+- Streamlit web app for presentation and live demo
+
 ## Why this project stands out
 
 This project moves beyond a generic storage simulation by framing the problem around **edge AI workloads** such as video analytics, sensor fusion, and model caching. The simulation compares:
@@ -50,6 +55,7 @@ Using the current default simulation setup:
 ## Repository structure
 
 - [edge_ai_flash_project.py](edge_ai_flash_project.py) — main simulation script
+- [app.py](app.py) — Streamlit demo application
 - [tests/test_edge_ai_flash_project.py](tests/test_edge_ai_flash_project.py) — unit tests
 - [.github/workflows/python-ci.yml](.github/workflows/python-ci.yml) — GitHub Actions CI
 - [.gitignore](.gitignore) — ignores Python cache and local environment files
@@ -59,7 +65,7 @@ Using the current default simulation setup:
 
 1. Install Python 3.10+
 2. Open the project folder
-3. Create a virtual environment if needed
+3. Install dependencies
 4. Run the main script
 
 ```bash
@@ -67,6 +73,14 @@ python edge_ai_flash_project.py
 ```
 
 Expected result: a report comparing baseline and AI-optimised placement.
+
+## How to run the web demo
+
+```bash
+streamlit run app.py
+```
+
+The browser demo lets you change workload size and seed, then compare baseline and AI-optimised metrics live during your presentation.
 
 ## How to test
 

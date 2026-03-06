@@ -1,1 +1,1 @@
-# No external dependencies required for the current version.
+streamlit>=1.44,<2.0

@@ -228,14 +228,17 @@ def print_report(baseline: PlacementResult, optimized: PlacementResult, total_bl
     print("- Capacity-aware scheduling avoids overloading premium zones.")
 
 
-def main() -> None:
+def run_simulation(count: int = 220, seed: int = 123) -> tuple[PlacementResult, PlacementResult, int]:
     flash = EdgeFlashModel()
-    workloads = generate_workloads(count=220, seed=123)
-
+    workloads = generate_workloads(count=count, seed=seed)
     baseline = simulate_baseline(workloads, flash)
     optimized = simulate_ai_optimized(workloads, flash)
+    return baseline, optimized, len(workloads)
 
-    print_report(baseline, optimized, total_blocks=len(workloads))
+
+def main() -> None:
+    baseline, optimized, total_blocks = run_simulation(count=220, seed=123)
+    print_report(baseline, optimized, total_blocks=total_blocks)
 
 
 if __name__ == "__main__":

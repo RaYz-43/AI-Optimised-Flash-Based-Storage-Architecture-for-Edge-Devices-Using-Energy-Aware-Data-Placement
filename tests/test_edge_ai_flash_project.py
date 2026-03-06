@@ -6,6 +6,7 @@ from edge_ai_flash_project import (
     EdgeFlashModel,
     WorkloadProfile,
     generate_workloads,
+    run_simulation,
     simulate_ai_optimized,
     simulate_baseline,
 )
@@ -52,6 +53,13 @@ class EdgeAIFlashProjectTests(unittest.TestCase):
         self.assertLess(optimized.avg_latency_ms, baseline.avg_latency_ms)
         self.assertLess(optimized.avg_energy_mj, baseline.avg_energy_mj)
         self.assertGreater(optimized.throughput_ops_per_s, 0.0)
+
+    def test_run_simulation_returns_expected_block_count(self) -> None:
+        baseline, optimized, total_blocks = run_simulation(count=120, seed=55)
+
+        self.assertEqual(total_blocks, 120)
+        self.assertGreater(baseline.avg_latency_ms, 0.0)
+        self.assertGreater(optimized.avg_latency_ms, 0.0)
 
 
 if __name__ == "__main__":
