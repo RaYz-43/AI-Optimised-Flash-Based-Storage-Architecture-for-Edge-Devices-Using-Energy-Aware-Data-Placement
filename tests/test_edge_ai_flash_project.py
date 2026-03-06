@@ -5,6 +5,7 @@ from edge_ai_flash_project import (
     AIPlacementPolicy,
     EdgeFlashModel,
     WorkloadProfile,
+    build_workloads_from_live_activity,
     generate_workloads,
     run_simulation,
     simulate_ai_optimized,
@@ -60,6 +61,20 @@ class EdgeAIFlashProjectTests(unittest.TestCase):
         self.assertEqual(total_blocks, 120)
         self.assertGreater(baseline.avg_latency_ms, 0.0)
         self.assertGreater(optimized.avg_latency_ms, 0.0)
+
+    def test_build_workloads_from_live_activity_maps_process_rows(self) -> None:
+        workloads = build_workloads_from_live_activity(
+            [
+                {"pid": 1010, "total_ops": 20, "write_ops": 8, "total_bytes": 131072, "active_samples": 4},
+                {"pid": 2020, "total_ops": 10, "write_ops": 1, "total_bytes": 32768, "active_samples": 2},
+            ],
+            sample_count=4,
+        )
+
+        self.assertEqual(len(workloads), 2)
+        self.assertEqual(workloads[0].block_id, 1010)
+        self.assertGreaterEqual(workloads[0].access_frequency, workloads[1].access_frequency)
+        self.assertGreater(workloads[0].write_ratio, workloads[1].write_ratio)
 
 
 if __name__ == "__main__":

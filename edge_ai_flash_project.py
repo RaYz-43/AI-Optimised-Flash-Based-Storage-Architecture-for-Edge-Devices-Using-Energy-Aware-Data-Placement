@@ -1,16 +1,23 @@
-﻿"""
-Project 2: AI-Optimised Flash-Based Storage Architecture for Edge Devices
-Single-file prototype for learning and demonstration.
+﻿"""Simulation core for AI-optimised flash placement on edge devices.
 
-How to run:
-    python edge_ai_flash_project.py
+This module provides:
+- synthetic workload generation
+- live process I/O capture converted into workload profiles
+- baseline and AI-inspired placement simulation
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from statistics import mean
 import random
+import time
+
+try:
+    import psutil
+except ImportError:  # pragma: no cover - handled at runtime when live mode is used.
+    psutil = None
 
 
 @dataclass
@@ -87,6 +94,17 @@ class AIPlacementPolicy:
         return "BALANCED" if "BALANCED" in candidates else candidates[0]
 
 
+def clamp_unit(value: float) -> float:
+    """Clamp a floating-point feature into the inclusive [0.0, 1.0] range."""
+    return min(1.0, max(0.0, value))
+
+
+def nearest_block_size(size_kb: float) -> int:
+    """Map arbitrary request sizes into the flash model's supported block sizes."""
+    allowed_sizes = [4, 8, 16, 32, 64]
+    return min(allowed_sizes, key=lambda allowed: abs(allowed - size_kb))
+
+
 def generate_workloads(count: int, seed: int = 42) -> list[WorkloadProfile]:
     random.seed(seed)
     workloads: list[WorkloadProfile] = []
@@ -95,14 +113,134 @@ def generate_workloads(count: int, seed: int = 42) -> list[WorkloadProfile]:
         # Create mixed AI-edge workloads: telemetry, video snippets, model cache, etc.
         profile = WorkloadProfile(
             block_id=i,
-            access_frequency=min(1.0, max(0.0, random.gauss(0.45, 0.25))),
-            write_ratio=min(1.0, max(0.0, random.gauss(0.40, 0.20))),
-            temporal_reuse=min(1.0, max(0.0, random.gauss(0.50, 0.30))),
+            access_frequency=clamp_unit(random.gauss(0.45, 0.25)),
+            write_ratio=clamp_unit(random.gauss(0.40, 0.20)),
+            temporal_reuse=clamp_unit(random.gauss(0.50, 0.30)),
             block_size_kb=random.choice([4, 8, 16, 32, 64]),
         )
         workloads.append(profile)
 
     return workloads
+
+
+def build_workloads_from_live_activity(
+    activity_rows: list[dict[str, float | int]],
+    sample_count: int,
+) -> list[WorkloadProfile]:
+    """Convert sampled process I/O activity into workload profiles.
+
+    Each active process is treated as a workload source. Small one-off events are
+    filtered out so the live mode focuses on sustained disk activity that is more
+    meaningful for placement decisions.
+    """
+    valid_rows = [
+        row
+        for row in activity_rows
+        if row["total_ops"] >= 3 and row["total_bytes"] >= 4096 and row["active_samples"] >= 2
+    ]
+    if not valid_rows:
+        return []
+
+    ranked_rows = sorted(
+        valid_rows,
+        key=lambda row: (
+            float(row["total_ops"]),
+            float(row["total_bytes"]),
+            float(row["active_samples"]),
+        ),
+        reverse=True,
+    )[:24]
+
+    max_ops = max(float(row["total_ops"]) for row in ranked_rows)
+    max_bytes = max(float(row["total_bytes"]) for row in ranked_rows)
+    workloads: list[WorkloadProfile] = []
+    for row in sorted(ranked_rows, key=lambda item: item["pid"]):
+        total_ops = float(row["total_ops"])
+        total_bytes = float(row["total_bytes"])
+        average_size_kb = (total_bytes / total_ops) / 1024.0
+        activity_ratio = math.log1p(total_ops) / math.log1p(max_ops)
+        byte_ratio = math.log1p(total_bytes) / math.log1p(max_bytes)
+        temporal_ratio = float(row["active_samples"]) / float(sample_count)
+        smoothed_write_ratio = (float(row["write_ops"]) + 0.5) / (total_ops + 1.0)
+
+        workloads.append(
+            WorkloadProfile(
+                block_id=int(row["pid"]),
+                access_frequency=clamp_unit(0.7 * activity_ratio + 0.3 * byte_ratio),
+                write_ratio=clamp_unit(smoothed_write_ratio),
+                temporal_reuse=clamp_unit(0.65 * temporal_ratio + 0.35 * activity_ratio),
+                block_size_kb=nearest_block_size(max(4.0, average_size_kb)),
+            )
+        )
+
+    return workloads
+
+
+def capture_live_process_workloads(duration_sec: int = 8, sample_interval_sec: float = 0.5) -> list[WorkloadProfile]:
+    """Capture live process-level disk I/O and convert it into workload profiles.
+
+    This is real-time system telemetry, not raw NAND or block-controller logs.
+    Each active process is treated as a workload source and mapped into the
+    simulator's feature space.
+    """
+
+    if psutil is None:
+        raise RuntimeError("psutil is required for live telemetry mode. Install it with pip install psutil.")
+
+    sample_count = max(1, int(duration_sec / sample_interval_sec))
+    process_state: dict[int, dict[str, float | int]] = {}
+
+    def snapshot() -> dict[int, tuple[int, int, int, int]]:
+        current: dict[int, tuple[int, int, int, int]] = {}
+        for process in psutil.process_iter(["pid", "name"]):
+            try:
+                counters = process.io_counters()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError):
+                continue
+            current[process.pid] = (
+                int(counters.read_count),
+                int(counters.write_count),
+                int(counters.read_bytes),
+                int(counters.write_bytes),
+            )
+        return current
+
+    previous = snapshot()
+    for _ in range(sample_count):
+        time.sleep(sample_interval_sec)
+        current = snapshot()
+        for pid, counters in current.items():
+            previous_counters = previous.get(pid)
+            if previous_counters is None:
+                continue
+
+            read_count_delta = max(0, counters[0] - previous_counters[0])
+            write_count_delta = max(0, counters[1] - previous_counters[1])
+            read_bytes_delta = max(0, counters[2] - previous_counters[2])
+            write_bytes_delta = max(0, counters[3] - previous_counters[3])
+            total_ops = read_count_delta + write_count_delta
+            total_bytes = read_bytes_delta + write_bytes_delta
+            if total_ops == 0 and total_bytes == 0:
+                continue
+
+            state = process_state.setdefault(
+                pid,
+                {
+                    "pid": pid,
+                    "total_ops": 0,
+                    "write_ops": 0,
+                    "total_bytes": 0,
+                    "active_samples": 0,
+                },
+            )
+            state["total_ops"] += total_ops
+            state["write_ops"] += write_count_delta
+            state["total_bytes"] += total_bytes
+            state["active_samples"] += 1
+
+        previous = current
+
+    return build_workloads_from_live_activity(list(process_state.values()), sample_count=sample_count)
 
 
 def evaluate_operation(profile: WorkloadProfile, zone: dict[str, float]) -> tuple[float, float, float]:
@@ -228,9 +366,14 @@ def print_report(baseline: PlacementResult, optimized: PlacementResult, total_bl
     print("- Capacity-aware scheduling avoids overloading premium zones.")
 
 
-def run_simulation(count: int = 220, seed: int = 123) -> tuple[PlacementResult, PlacementResult, int]:
+def run_simulation(
+    count: int = 220,
+    seed: int = 123,
+    workloads: list[WorkloadProfile] | None = None,
+) -> tuple[PlacementResult, PlacementResult, int]:
+    """Run the baseline and AI-inspired strategies on a workload collection."""
     flash = EdgeFlashModel()
-    workloads = generate_workloads(count=count, seed=seed)
+    workloads = workloads if workloads is not None else generate_workloads(count=count, seed=seed)
     baseline = simulate_baseline(workloads, flash)
     optimized = simulate_ai_optimized(workloads, flash)
     return baseline, optimized, len(workloads)

@@ -1,20 +1,27 @@
 # AI-Optimised Flash Storage for Edge AI
 
-A portfolio-ready Python simulation that demonstrates how AI-aware data placement can improve flash storage performance for edge devices.
+A simulation-based proof of concept that demonstrates how workload-aware flash placement can improve latency, energy use, and throughput for edge AI devices.
 
-![Project preview](assets/project-preview.svg)
+![Project preview](assets/project-preview.png)
 
 ## Demo options
 
 - Terminal mode for quick verification
 - Streamlit web app for presentation and live demo
+- Live telemetry mode using short real-time process disk I/O capture
+
+## What This Project Is
+
+This project is a lightweight storage-systems simulator, not a hardware benchmark. It models flash zones with different performance and energy characteristics, then compares:
+
+- **Baseline random placement**
+- **AI-inspired workload-aware placement**
+
+The current "AI" is an explainable heuristic policy rather than a trained neural network or classifier. That keeps the project transparent, lightweight, and appropriate for a proof-of-concept demo.
 
 ## Why this project stands out
 
-This project moves beyond a generic storage simulation by framing the problem around **edge AI workloads** such as video analytics, sensor fusion, and model caching. The simulation compares:
-
-- **Baseline random placement**
-- **AI-optimised energy-aware placement**
+This project moves beyond a generic storage simulation by framing the problem around **edge AI workloads** such as video analytics, sensor fusion, and model caching.
 
 The goal is to show how intelligent workload-aware storage decisions can reduce latency, lower energy use, and improve throughput.
 
@@ -35,17 +42,18 @@ That tells a stronger story than just “flash architecture.” It shows:
 ## Current features
 
 - Synthetic edge workload generation
+- Live telemetry mode using process-level disk I/O activity captured from the local machine
 - Zone-based flash model with different latency, energy, and wear profiles
 - AI-inspired hotness scoring policy
 - Capacity-aware block placement
 - Placement-aware scheduling bonuses for matched data-zone behavior
 - Baseline vs optimised comparison report
 - Unit tests and GitHub Actions CI
-- Clean single-file prototype for learning
+- Browser-based Streamlit demo for presentation
 
 ## Verified sample results
 
-Using the current default simulation setup:
+Using the default synthetic simulation setup:
 
 - **Latency reduction:** 12.46%
 - **Energy reduction:** 11.62%
@@ -59,16 +67,19 @@ Using the current default simulation setup:
 - [tests/test_edge_ai_flash_project.py](tests/test_edge_ai_flash_project.py) — unit tests
 - [.github/workflows/python-ci.yml](.github/workflows/python-ci.yml) — GitHub Actions CI
 - [.gitignore](.gitignore) — ignores Python cache and local environment files
+- [requirements.txt](requirements.txt) — Python dependencies for the demo app and live telemetry mode
 - [LICENSE](LICENSE) — MIT license
 
 ## How to run
 
 1. Install Python 3.10+
 2. Open the project folder
-3. Install dependencies
-4. Run the main script
+3. Create or select a virtual environment
+4. Install dependencies
+5. Run the main script
 
 ```bash
+python -m pip install -r requirements.txt
 python edge_ai_flash_project.py
 ```
 
@@ -77,16 +88,38 @@ Expected result: a report comparing baseline and AI-optimised placement.
 ## How to run the web demo
 
 ```bash
+python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The browser demo lets you change workload size and seed, then compare baseline and AI-optimised metrics live during your presentation.
+The browser demo lets you switch between a controlled synthetic workload and a short live telemetry capture from the current machine.
+
+## Live telemetry mode
+
+The web demo supports a real-time capture mode. During a short capture window, it samples current process disk I/O counters and converts that activity into workload profiles for the simulator.
+
+This is more realistic than synthetic generation, but it is still **process-level telemetry**, not raw flash-controller logs or true block-level NAND tracing.
+
+Good activities for testing live mode:
+
+- opening large folders in File Explorer
+- copying files
+- launching applications
+- opening several browser tabs with heavy sites
 
 ## How to test
 
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+All tests should pass before presenting or pushing changes.
+
+## Presentation Summary
+
+If you need one sentence for a demo:
+
+> This project is a simulation-based proof of concept for AI-aware flash placement on edge devices, showing that workload-aware storage decisions can reduce latency and energy use while improving throughput.
 
 ## Example project pitch
 
@@ -110,12 +143,12 @@ This repository now includes the core pieces.
 
 If you want to push this further, add one or more of these:
 
-1. **Charts**: export results and plot latency/energy comparisons
+1. **Captured-process table**: show the top live workloads during telemetry mode
 2. **Scenario presets**: healthcare edge AI, autonomous drones, smart city cameras
-3. **CLI arguments**: choose workload size, random seed, or strategy
-4. **Dashboard**: small Streamlit app for interactive demos
-5. **Results export**: save JSON or CSV reports for analysis
-6. **Real ML model**: replace heuristic scoring with a trained classifier/regressor
+3. **CLI arguments**: choose workload size, random seed, or capture duration
+4. **Results export**: save JSON or CSV reports for analysis
+5. **Charts**: add richer visual comparisons and trend history
+6. **Real ML model**: replace the heuristic scoring policy with a trained classifier or regressor
 
 ## License
 

@@ -3,7 +3,11 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from edge_ai_flash_project import PlacementResult, run_simulation
+from edge_ai_flash_project import (
+    PlacementResult,
+    capture_live_process_workloads,
+    run_simulation,
+)
 
 
 st.set_page_config(
@@ -251,28 +255,6 @@ def to_rows(baseline: PlacementResult, optimized: PlacementResult) -> list[dict[
     ]
 
 
-def to_chart_dataframe(baseline: PlacementResult, optimized: PlacementResult) -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {
-                "Metric": "Latency",
-                "Baseline": round(baseline.avg_latency_ms, 4),
-                "AI-Optimized": round(optimized.avg_latency_ms, 4),
-            },
-            {
-                "Metric": "Energy",
-                "Baseline": round(baseline.avg_energy_mj, 4),
-                "AI-Optimized": round(optimized.avg_energy_mj, 4),
-            },
-            {
-                "Metric": "Throughput",
-                "Baseline": round(baseline.throughput_ops_per_s, 2),
-                "AI-Optimized": round(optimized.throughput_ops_per_s, 2),
-            },
-        ]
-    ).set_index("Metric")
-
-
 def to_improvement_dataframe(
     latency_gain: float,
     energy_gain: float,
@@ -287,24 +269,73 @@ def to_improvement_dataframe(
     )
 
 
+def describe_workload_source(workload_mode: str, seed: int, live_capture_seconds: int) -> tuple[str, str]:
+    if workload_mode == "Synthetic":
+        return (
+            f"Synthetic generator • seed {seed}",
+            "Controlled synthetic workload tuned to represent mixed edge AI access patterns.",
+        )
+
+    return (
+        f"Live telemetry • process I/O capture ({live_capture_seconds}s)",
+        "Short real-time capture of process-level disk I/O converted into workload profiles for the simulator.",
+    )
+
+
 with st.sidebar:
     st.header("Simulation controls")
-    workload_count = st.slider("Workload blocks", min_value=60, max_value=500, value=220, step=20)
-    seed = st.number_input("Random seed", min_value=1, max_value=9999, value=123, step=1)
+    workload_mode = st.radio("Workload source", options=["Synthetic", "Live telemetry"], horizontal=False)
+    workload_count = 220
+    seed = 123
+    live_capture_seconds = 8
+
+    if workload_mode == "Synthetic":
+        workload_count = st.slider("Workload blocks", min_value=60, max_value=500, value=220, step=20)
+        seed = st.number_input("Random seed", min_value=1, max_value=9999, value=123, step=1)
+    else:
+        live_capture_seconds = st.slider("Capture duration (seconds)", min_value=4, max_value=20, value=8, step=2)
+        st.caption("Samples real-time process disk I/O counters and converts them into workload profiles.")
+
     run_clicked = st.button("Run simulation", type="primary", use_container_width=True)
     st.markdown(
         """
         <div class="mono-text">
-        Keep the same seed during the demo so every rerun uses the same workload and the comparison stays fair.
+        Synthetic mode is reproducible by seed. Live telemetry samples current process I/O activity in real time.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 if run_clicked or "simulation_result" not in st.session_state:
-    st.session_state.simulation_result = run_simulation(count=workload_count, seed=seed)
+    if workload_mode == "Synthetic":
+        source_label, source_note = describe_workload_source(workload_mode, seed, live_capture_seconds)
+        st.session_state.simulation_result = {
+            "source_label": source_label,
+            "source_note": source_note,
+            "results": run_simulation(count=workload_count, seed=seed),
+        }
+    else:
+        with st.spinner(f"Capturing live process disk activity for {live_capture_seconds} seconds..."):
+            live_workloads = capture_live_process_workloads(duration_sec=live_capture_seconds, sample_interval_sec=0.5)
+        if not live_workloads:
+            st.warning("No live disk I/O activity was captured. Try opening files, copying data, or refreshing a heavy app while capture runs.")
+            st.session_state.simulation_result = {
+                "source_label": f"Live telemetry • idle capture ({live_capture_seconds}s)",
+                "source_note": "No meaningful live activity was detected, so the app fell back to a synthetic sample to keep the demo usable.",
+                "results": run_simulation(count=120, seed=123),
+            }
+        else:
+            source_label, source_note = describe_workload_source(workload_mode, seed, live_capture_seconds)
+            st.session_state.simulation_result = {
+                "source_label": source_label,
+                "source_note": source_note,
+                "results": run_simulation(workloads=live_workloads),
+            }
 
-baseline, optimized, total_blocks = st.session_state.simulation_result
+result_bundle = st.session_state.simulation_result
+baseline, optimized, total_blocks = result_bundle["results"]
+source_label = result_bundle["source_label"]
+source_note = result_bundle["source_note"]
 
 latency_gain = improvement(baseline.avg_latency_ms, optimized.avg_latency_ms)
 energy_gain = improvement(baseline.avg_energy_mj, optimized.avg_energy_mj)
@@ -324,9 +355,11 @@ st.markdown(
             </div>
             <div class="hero-panel">
                 <h4>Presenter takeaway</h4>
-                <p><strong>{total_blocks}</strong> synthetic workload blocks evaluated under the same conditions.</p>
+                <p><strong>{total_blocks}</strong> workload profiles evaluated under the same conditions.</p>
                 <p><strong>{latency_gain:.2f}%</strong> lower latency and <strong>{energy_gain:.2f}%</strong> lower energy under the AI-guided policy.</p>
                 <p><strong>{throughput_gain:.2f}%</strong> higher throughput because the policy keeps high-value data closer to fast flash.</p>
+                <p><strong>Input source:</strong> {source_label}</p>
+                <p>{source_note}</p>
             </div>
         </div>
     </section>
@@ -371,8 +404,9 @@ with overview_col:
             "Edge devices run AI inference with tight power and storage limits. This model shows that smarter data placement can cut access cost by prioritizing hot blocks for fast flash and relegating colder data to denser tiers."
         )
         st.write(
-            "Both strategies use the same generated workload, so any performance gap comes from placement quality rather than differences in the input data."
+            "Both strategies use the same workload source, so any performance gap comes from placement quality rather than differences in the input data."
         )
+        st.caption(f"Current input: {source_label}")
 
 with note_col:
     with st.container(border=True):
@@ -392,7 +426,7 @@ with comparison_col:
     with st.container(border=True):
         st.subheader("Metric Comparison")
         st.table(to_rows(baseline, optimized))
-        st.caption("Raw metrics for the same synthetic workload under both placement strategies.")
+        st.caption("Raw metrics for the same workload source under both placement strategies.")
 
 with impact_col:
     with st.container(border=True):
@@ -416,8 +450,9 @@ with methodology_col:
     with st.container(border=True):
         st.subheader("Methodology")
         st.write(
-            "The simulator creates synthetic workload blocks, evaluates a random baseline, and then applies an AI-inspired placement policy using the same inputs. This keeps the comparison controlled and easy to explain in a live demo."
+            "The simulator evaluates a random baseline and then applies an AI-inspired placement policy using the same inputs. This keeps the comparison controlled and easy to explain in a live demo."
         )
         st.write(
             "Hot, reusable blocks tend to move toward faster flash zones, while colder data is assigned to denser zones that trade a little speed for capacity efficiency."
         )
+        st.caption("Live telemetry mode uses process-level disk I/O counters in real time. It is more realistic than synthetic input, but it is still not raw flash-controller logging.")
