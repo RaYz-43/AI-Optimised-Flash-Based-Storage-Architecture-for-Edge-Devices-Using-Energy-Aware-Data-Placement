@@ -1,27 +1,90 @@
 <svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="720" fill="#0F172A"/>
-  <rect x="40" y="40" width="1120" height="640" rx="24" fill="#111827" stroke="#334155" stroke-width="2"/>
-  <text x="80" y="105" fill="#E2E8F0" font-family="Consolas, 'Courier New', monospace" font-size="34" font-weight="700">AI-Optimised Flash Storage for Edge AI</text>
-  <text x="80" y="145" fill="#94A3B8" font-family="Consolas, 'Courier New', monospace" font-size="20">Simulation preview • baseline vs AI-aware placement</text>
+  <rect width="1200" height="720" fill="#F5EFE4"/>
+  <circle cx="162" cy="96" r="170" fill="#F9C289" fill-opacity="0.22"/>
+  <circle cx="1085" cy="82" r="190" fill="#9CB8ED" fill-opacity="0.20"/>
 
-  <rect x="80" y="185" width="500" height="210" rx="18" fill="#1E293B" stroke="#475569"/>
-  <text x="110" y="230" fill="#F8FAFC" font-family="Consolas, 'Courier New', monospace" font-size="28" font-weight="700">Baseline</text>
-  <text x="110" y="275" fill="#CBD5E1" font-family="Consolas, 'Courier New', monospace" font-size="22">Latency:    1.1676 ms</text>
-  <text x="110" y="315" fill="#CBD5E1" font-family="Consolas, 'Courier New', monospace" font-size="22">Energy:     1.2623 mJ/op</text>
-  <text x="110" y="355" fill="#CBD5E1" font-family="Consolas, 'Courier New', monospace" font-size="22">Throughput: 856.46 ops/s</text>
+  <rect x="18" y="18" width="1164" height="684" rx="28" fill="#F7F2E9" stroke="#E1D7C8"/>
+  <rect x="18" y="18" width="185" height="684" rx="28" fill="#F2EBDD"/>
+  <line x1="203" y1="18" x2="203" y2="702" stroke="#E1D7C8"/>
 
-  <rect x="620" y="185" width="500" height="210" rx="18" fill="#052E2B" stroke="#10B981"/>
-  <text x="650" y="230" fill="#ECFDF5" font-family="Consolas, 'Courier New', monospace" font-size="28" font-weight="700">AI-Optimized</text>
-  <text x="650" y="275" fill="#D1FAE5" font-family="Consolas, 'Courier New', monospace" font-size="22">Latency:    1.0222 ms</text>
-  <text x="650" y="315" fill="#D1FAE5" font-family="Consolas, 'Courier New', monospace" font-size="22">Energy:     1.1156 mJ/op</text>
-  <text x="650" y="355" fill="#D1FAE5" font-family="Consolas, 'Courier New', monospace" font-size="22">Throughput: 978.31 ops/s</text>
+  <text x="40" y="72" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">Simulation controls</text>
+  <text x="40" y="122" fill="#374151" font-family="Arial, Helvetica, sans-serif" font-size="17">Workload blocks</text>
+  <line x1="40" y1="168" x2="175" y2="168" stroke="#D5D0C5" stroke-width="4" stroke-linecap="round"/>
+  <line x1="40" y1="168" x2="112" y2="168" stroke="#F75B53" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="112" cy="168" r="8" fill="#F75B53"/>
+  <text x="106" y="152" text-anchor="middle" fill="#F75B53" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">220</text>
+  <text x="40" y="230" fill="#374151" font-family="Arial, Helvetica, sans-serif" font-size="17">Random seed</text>
+  <rect x="40" y="246" width="136" height="42" rx="10" fill="#FCF8F2" stroke="#DCCFBC"/>
+  <text x="52" y="273" fill="#475569" font-family="Courier New, monospace" font-size="18">123</text>
+  <rect x="40" y="310" width="136" height="44" rx="10" fill="#FF5A52"/>
+  <text x="108" y="338" text-anchor="middle" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Run simulation</text>
+  <text x="40" y="398" fill="#64748B" font-family="Courier New, monospace" font-size="15">Use the same seed during the</text>
+  <text x="40" y="423" fill="#64748B" font-family="Courier New, monospace" font-size="15">demo so every rerun stays fair.</text>
 
-  <rect x="80" y="440" width="1040" height="180" rx="18" fill="#0B1220" stroke="#334155"/>
-  <text x="110" y="490" fill="#F8FAFC" font-family="Consolas, 'Courier New', monospace" font-size="28" font-weight="700">Relative improvement</text>
-  <text x="110" y="535" fill="#22C55E" font-family="Consolas, 'Courier New', monospace" font-size="24">Latency reduction:   12.46%</text>
-  <text x="110" y="575" fill="#22C55E" font-family="Consolas, 'Courier New', monospace" font-size="24">Energy reduction:    11.62%</text>
-  <text x="560" y="535" fill="#22C55E" font-family="Consolas, 'Courier New', monospace" font-size="24">Throughput increase: 14.23%</text>
-  <text x="560" y="575" fill="#22C55E" font-family="Consolas, 'Courier New', monospace" font-size="24">Wear reduction:      0.57%</text>
+  <rect x="228" y="38" width="222" height="116" rx="18" fill="#FDFBF6" stroke="#DDD4C7"/>
+  <rect x="468" y="38" width="222" height="116" rx="18" fill="#FDFBF6" stroke="#DDD4C7"/>
+  <rect x="708" y="38" width="222" height="116" rx="18" fill="#FDFBF6" stroke="#DDD4C7"/>
+  <rect x="948" y="38" width="222" height="116" rx="18" fill="#FDFBF6" stroke="#DDD4C7"/>
 
-  <text x="80" y="665" fill="#64748B" font-family="Consolas, 'Courier New', monospace" font-size="18">Generated from the local simulation output for README preview.</text>
+  <text x="246" y="66" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="13" letter-spacing="1.2">LATENCY REDUCTION</text>
+  <text x="246" y="116" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">12.46%</text>
+  <text x="246" y="138" fill="#0F766E" font-family="Courier New, monospace" font-size="18">AI: 1.0222 ms</text>
+
+  <text x="486" y="66" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="13" letter-spacing="1.2">ENERGY REDUCTION</text>
+  <text x="486" y="116" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">11.62%</text>
+  <text x="486" y="138" fill="#0F766E" font-family="Courier New, monospace" font-size="18">AI: 1.1156 mJ/op</text>
+
+  <text x="726" y="66" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="13" letter-spacing="1.2">WEAR REDUCTION</text>
+  <text x="726" y="116" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">0.57%</text>
+  <text x="726" y="138" fill="#0F766E" font-family="Courier New, monospace" font-size="18">AI: 1.1315</text>
+
+  <text x="966" y="66" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="13" letter-spacing="1.2">THROUGHPUT INCREASE</text>
+  <text x="966" y="116" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">14.23%</text>
+  <text x="966" y="138" fill="#0F766E" font-family="Courier New, monospace" font-size="18">AI: 978.31 ops/s</text>
+
+  <rect x="228" y="178" width="486" height="182" rx="22" fill="#FBF7F0" stroke="#DED4C6"/>
+  <rect x="730" y="178" width="440" height="182" rx="22" fill="#FBF7F0" stroke="#E7D7C1"/>
+  <text x="252" y="220" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Executive Summary</text>
+  <text x="252" y="258" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="18">A simulation-based prototype showing that workload-aware flash placement</text>
+  <text x="252" y="284" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="18">can reduce access cost for edge AI devices by keeping hot data closer to</text>
+  <text x="252" y="310" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="18">faster flash zones while moving colder blocks into denser storage tiers.</text>
+
+  <text x="754" y="220" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Talk Track</text>
+  <text x="754" y="258" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="18">1. Edge AI runs under storage and power constraints.</text>
+  <text x="754" y="284" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="18">2. Random placement ignores reuse and write behavior.</text>
+  <text x="754" y="310" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="18">3. The policy scores blocks and assigns the best flash zone.</text>
+  <text x="754" y="336" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="18">4. Better placement lowers latency and raises throughput.</text>
+
+  <rect x="228" y="386" width="486" height="264" rx="22" fill="#FBF7F0" stroke="#DED4C6"/>
+  <rect x="730" y="386" width="440" height="264" rx="22" fill="#FBF7F0" stroke="#DED4C6"/>
+  <text x="252" y="428" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Metric Comparison</text>
+  <text x="274" y="474" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="16">Metric</text>
+  <text x="520" y="474" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="16">Baseline</text>
+  <text x="622" y="474" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="16">AI-Optimized</text>
+  <line x1="252" y1="486" x2="688" y2="486" stroke="#E6DED1"/>
+  <text x="274" y="520" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="17">Average latency (ms)</text>
+  <text x="544" y="520" fill="#334155" font-family="Courier New, monospace" font-size="17">1.1676</text>
+  <text x="636" y="520" fill="#334155" font-family="Courier New, monospace" font-size="17">1.0222</text>
+  <text x="274" y="555" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="17">Average energy (mJ/op)</text>
+  <text x="544" y="555" fill="#334155" font-family="Courier New, monospace" font-size="17">1.2623</text>
+  <text x="636" y="555" fill="#334155" font-family="Courier New, monospace" font-size="17">1.1156</text>
+  <text x="274" y="590" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="17">Average wear cost</text>
+  <text x="544" y="590" fill="#334155" font-family="Courier New, monospace" font-size="17">1.1380</text>
+  <text x="636" y="590" fill="#334155" font-family="Courier New, monospace" font-size="17">1.1315</text>
+  <text x="274" y="625" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="17">Throughput (ops/s)</text>
+  <text x="530" y="625" fill="#334155" font-family="Courier New, monospace" font-size="17">856.46</text>
+  <text x="630" y="625" fill="#334155" font-family="Courier New, monospace" font-size="17">978.31</text>
+
+  <text x="754" y="428" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Improvement Overview</text>
+  <line x1="770" y1="620" x2="1138" y2="620" stroke="#D6D3D1" stroke-width="2"/>
+  <rect x="796" y="524" width="54" height="96" fill="#C2410C"/>
+  <rect x="888" y="530" width="54" height="90" fill="#C2410C"/>
+  <rect x="980" y="612" width="54" height="8" fill="#C2410C"/>
+  <rect x="1072" y="510" width="54" height="110" fill="#C2410C"/>
+  <text x="823" y="642" text-anchor="middle" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="13">Latency</text>
+  <text x="915" y="642" text-anchor="middle" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="13">Energy</text>
+  <text x="1007" y="642" text-anchor="middle" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="13">Wear</text>
+  <text x="1099" y="642" text-anchor="middle" fill="#7C8AA0" font-family="Arial, Helvetica, sans-serif" font-size="13">Throughput</text>
+
+  <text x="228" y="688" fill="#64748B" font-family="Courier New, monospace" font-size="15">README preview updated to match the current presentation-style Streamlit demo.</text>
 </svg>
