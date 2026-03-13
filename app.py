@@ -8,6 +8,7 @@ from edge_ai_flash_project import (
     capture_live_process_workloads,
     run_simulation,
 )
+from ml.inference import get_model_evaluation, load_trained_model
 
 
 st.set_page_config(
@@ -272,14 +273,20 @@ def to_improvement_dataframe(
 def describe_workload_source(workload_mode: str, seed: int, live_capture_seconds: int) -> tuple[str, str]:
     if workload_mode == "Synthetic":
         return (
-            f"Synthetic generator • seed {seed}",
-            "Controlled synthetic workload tuned to represent mixed edge AI access patterns.",
+            f"Synthetic benchmark • seed {seed}",
+            "Controlled synthetic workload tuned to represent mixed edge AI access patterns for repeatable benchmarking.",
         )
 
     return (
         f"Live telemetry • process I/O capture ({live_capture_seconds}s)",
-        "Short real-time capture of process-level disk I/O converted into workload profiles for the simulator.",
+        "Short real-time capture of process-level disk I/O converted into workload profiles for an ML-guided placement run.",
     )
+
+
+model_artifact = load_trained_model()
+selected_model_name = "Heuristic fallback"
+if model_artifact is not None:
+    selected_model_name = str(model_artifact.get("model_name", "Random Forest"))
 
 
 with st.sidebar:
@@ -298,9 +305,9 @@ with st.sidebar:
 
     run_clicked = st.button("Run simulation", type="primary", use_container_width=True)
     st.markdown(
-        """
+        f"""
         <div class="mono-text">
-        Synthetic mode is reproducible by seed. Live telemetry samples current process I/O activity in real time.
+        Placement engine: {selected_model_name} plus an energy-aware scheduler. Synthetic mode provides repeatable benchmarking, while Live telemetry samples current process I/O in real time.
         </div>
         """,
         unsafe_allow_html=True,
@@ -312,7 +319,7 @@ if run_clicked or "simulation_result" not in st.session_state:
         st.session_state.simulation_result = {
             "source_label": source_label,
             "source_note": source_note,
-            "results": run_simulation(count=workload_count, seed=seed),
+            "results": run_simulation(count=workload_count, seed=seed, policy_mode="ml"),
         }
     else:
         with st.spinner(f"Capturing live process disk activity for {live_capture_seconds} seconds..."):
@@ -322,25 +329,37 @@ if run_clicked or "simulation_result" not in st.session_state:
             st.session_state.simulation_result = {
                 "source_label": f"Live telemetry • idle capture ({live_capture_seconds}s)",
                 "source_note": "No meaningful live activity was detected, so the app fell back to a synthetic sample to keep the demo usable.",
-                "results": run_simulation(count=120, seed=123),
+                "results": run_simulation(count=120, seed=123, policy_mode="ml"),
             }
         else:
             source_label, source_note = describe_workload_source(workload_mode, seed, live_capture_seconds)
             st.session_state.simulation_result = {
                 "source_label": source_label,
                 "source_note": source_note,
-                "results": run_simulation(workloads=live_workloads),
+                "results": run_simulation(workloads=live_workloads, policy_mode="ml"),
             }
 
 result_bundle = st.session_state.simulation_result
 baseline, optimized, total_blocks = result_bundle["results"]
 source_label = result_bundle["source_label"]
 source_note = result_bundle["source_note"]
+model_evaluation = get_model_evaluation(model_artifact)
 
 latency_gain = improvement(baseline.avg_latency_ms, optimized.avg_latency_ms)
 energy_gain = improvement(baseline.avg_energy_mj, optimized.avg_energy_mj)
 wear_gain = improvement(baseline.avg_wear_cost, optimized.avg_wear_cost)
 throughput_gain = improvement(baseline.throughput_ops_per_s, optimized.throughput_ops_per_s, inverse=False)
+wear_metric_label = "Wear Reduction" if wear_gain >= 0 else "Wear Tradeoff"
+wear_summary = (
+    f"{wear_gain:.2f}% lower wear under the ML-guided placement engine."
+    if wear_gain >= 0
+    else f"{abs(wear_gain):.2f}% higher wear in this run, indicating that the current policy prioritizes latency and throughput over wear in this scenario."
+)
+wear_caption = (
+    "Positive percentages indicate lower average wear cost."
+    if wear_gain >= 0
+    else "A negative wear value means this run traded a small amount of wear efficiency for faster access and higher throughput."
+)
 
 st.markdown(
     f"""
@@ -350,14 +369,16 @@ st.markdown(
             <div>
                 <h1 class="hero-title">AI-Optimised Flash Placement for Edge Devices</h1>
                 <p class="hero-copy">
-                    This presentation demo compares a random flash-allocation baseline against a workload-aware policy that places hot, reusable AI data in faster storage zones and colder blocks in denser tiers.
+                    This presentation demo compares a random placement baseline with an ML-guided placement engine that predicts the most suitable flash zone for each workload and then applies energy-aware scheduling.
                 </p>
             </div>
             <div class="hero-panel">
                 <h4>Presenter takeaway</h4>
                 <p><strong>{total_blocks}</strong> workload profiles evaluated under the same conditions.</p>
-                <p><strong>{latency_gain:.2f}%</strong> lower latency and <strong>{energy_gain:.2f}%</strong> lower energy under the AI-guided policy.</p>
-                <p><strong>{throughput_gain:.2f}%</strong> higher throughput because the policy keeps high-value data closer to fast flash.</p>
+                <p><strong>{latency_gain:.2f}%</strong> lower latency and <strong>{energy_gain:.2f}%</strong> lower energy under the ML-guided placement engine.</p>
+                <p><strong>{throughput_gain:.2f}%</strong> higher throughput because the model prioritizes high-value data for faster flash tiers.</p>
+                <p><strong>Wear outcome:</strong> {wear_summary}</p>
+                <p><strong>Placement engine:</strong> {selected_model_name} + energy-aware scheduler</p>
                 <p><strong>Input source:</strong> {source_label}</p>
                 <p>{source_note}</p>
             </div>
@@ -381,7 +402,7 @@ st.markdown(
             <div class="impact-detail">AI: {optimized.avg_energy_mj:.4f} mJ/op</div>
         </div>
         <div class="impact-card">
-            <div class="impact-label">Wear Reduction</div>
+            <div class="impact-label">{wear_metric_label}</div>
             <div class="impact-value">{wear_gain:.2f}%</div>
             <div class="impact-detail">AI: {optimized.avg_wear_cost:.4f}</div>
         </div>
@@ -395,64 +416,51 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-overview_col, note_col = st.columns([1.3, 0.9])
-
-with overview_col:
-    with st.container(border=True):
-        st.subheader("Executive Summary")
-        st.write(
-            "Edge devices run AI inference with tight power and storage limits. This model shows that smarter data placement can cut access cost by prioritizing hot blocks for fast flash and relegating colder data to denser tiers."
-        )
-        st.write(
-            "Both strategies use the same workload source, so any performance gap comes from placement quality rather than differences in the input data."
-        )
-        st.caption(f"Current input: {source_label}")
-
-with note_col:
-    with st.container(border=True):
-        st.subheader("Talk Track")
-        st.markdown(
-            """
-1. Start with the problem: edge AI has limited flash storage, power budget, and memory bandwidth.
-2. Explain the baseline: random placement ignores how often a block is reused or how write-heavy it is.
-3. Explain the AI-inspired policy: it scores blocks by access frequency, write behavior, and temporal reuse.
-4. Close on impact: smarter placement lowers latency and energy while raising throughput under the same workload.
-"""
-        )
-
 comparison_col, impact_col = st.columns([1.05, 0.95])
 
 with comparison_col:
     with st.container(border=True):
         st.subheader("Metric Comparison")
         st.table(to_rows(baseline, optimized))
-        st.caption("Raw metrics for the same workload source under both placement strategies.")
+        st.caption("Raw metrics for the same workload source under baseline and ML-guided placement.")
 
 with impact_col:
     with st.container(border=True):
         st.subheader("Improvement Overview")
         st.bar_chart(to_improvement_dataframe(latency_gain, energy_gain, wear_gain, throughput_gain), color="#c2410c")
-        st.caption("Positive percentages show the relative benefit of the AI-aware placement policy.")
+        st.caption(f"Positive percentages show the relative benefit of the ML-guided placement engine. {wear_caption}")
 
-closing_col, methodology_col = st.columns(2)
+st.caption(f"Current input: {source_label}. Placement model: {selected_model_name}.")
 
-with closing_col:
-    with st.container(border=True):
-        st.subheader("Project Story")
-        st.write(
-            "This demo models an energy-aware flash architecture for edge devices. The main idea is simple: when storage decisions understand workload behavior, the system spends less time and energy fetching important data."
-        )
-        st.write(
-            "That matters for video analytics, smart sensors, drones, and other edge AI systems where small efficiency gains can directly improve responsiveness and battery life."
-        )
+if model_evaluation is not None:
+    metric_col, class_col = st.columns([0.9, 1.1])
 
-with methodology_col:
-    with st.container(border=True):
-        st.subheader("Methodology")
-        st.write(
-            "The simulator evaluates a random baseline and then applies an AI-inspired placement policy using the same inputs. This keeps the comparison controlled and easy to explain in a live demo."
-        )
-        st.write(
-            "Hot, reusable blocks tend to move toward faster flash zones, while colder data is assigned to denser zones that trade a little speed for capacity efficiency."
-        )
-        st.caption("Live telemetry mode uses process-level disk I/O counters in real time. It is more realistic than synthetic input, but it is still not raw flash-controller logging.")
+    with metric_col:
+        with st.container(border=True):
+            st.subheader("ML Evaluation")
+            metric_frame = pd.DataFrame(
+                {
+                    "Score": [
+                        model_evaluation["accuracy"],
+                        model_evaluation["macro_precision"],
+                        model_evaluation["macro_recall"],
+                        model_evaluation["macro_f1"],
+                        model_evaluation["weighted_f1"],
+                    ]
+                },
+                index=["Accuracy", "Macro Precision", "Macro Recall", "Macro F1", "Weighted F1"],
+            )
+            st.table(metric_frame.style.format("{:.4f}"))
+            st.caption(
+                f"Hold-out evaluation on {model_evaluation['test_size']} test samples after training on {model_evaluation['train_size']} samples."
+            )
+
+    with class_col:
+        with st.container(border=True):
+            st.subheader("Per-Class Performance")
+            per_class_frame = pd.DataFrame.from_dict(model_evaluation["per_class"], orient="index")
+            st.table(per_class_frame.style.format({"precision": "{:.4f}", "recall": "{:.4f}", "f1": "{:.4f}", "support": "{:.0f}"}))
+            confusion = model_evaluation["confusion_matrix"]
+            confusion_frame = pd.DataFrame(confusion["values"], index=confusion["labels"], columns=confusion["labels"])
+            st.caption("Confusion matrix on the hold-out set. Rows represent true labels and columns represent predicted labels.")
+            st.dataframe(confusion_frame, use_container_width=True)

@@ -1,5 +1,6 @@
 import random
 import unittest
+from collections import Counter
 
 from edge_ai_flash_project import (
     AIPlacementPolicy,
@@ -11,6 +12,8 @@ from edge_ai_flash_project import (
     simulate_ai_optimized,
     simulate_baseline,
 )
+from ml.inference import load_trained_model, predict_profile_zone
+from ml.training import generate_labeled_workloads, train_and_save_model
 
 
 class EdgeAIFlashProjectTests(unittest.TestCase):
@@ -75,6 +78,50 @@ class EdgeAIFlashProjectTests(unittest.TestCase):
         self.assertEqual(workloads[0].block_id, 1010)
         self.assertGreaterEqual(workloads[0].access_frequency, workloads[1].access_frequency)
         self.assertGreater(workloads[0].write_ratio, workloads[1].write_ratio)
+
+    def test_generate_labeled_workloads_returns_matching_lengths(self) -> None:
+        workloads, labels = generate_labeled_workloads(sample_count=200, seed=99)
+        label_counts = Counter(labels)
+
+        self.assertEqual(len(workloads), 200)
+        self.assertEqual(len(labels), 200)
+        self.assertTrue(set(labels).issubset({"HOT_CACHE", "BALANCED", "COLD_DENSE"}))
+        self.assertGreaterEqual(len(label_counts), 3)
+        for zone_name in {"HOT_CACHE", "BALANCED", "COLD_DENSE"}:
+            self.assertGreater(label_counts[zone_name], 0)
+
+    def test_ml_artifact_can_predict_zone(self) -> None:
+        artifacts = train_and_save_model(sample_count=1200, seed=2026)
+        artifact = load_trained_model()
+        profile = WorkloadProfile(
+            block_id=99,
+            access_frequency=0.91,
+            write_ratio=0.08,
+            temporal_reuse=0.87,
+            block_size_kb=16,
+        )
+
+        prediction = predict_profile_zone(profile, artifact)
+
+        self.assertIn(prediction.zone, {"HOT_CACHE", "BALANCED", "COLD_DENSE"})
+        self.assertGreaterEqual(prediction.priority_score, 0.0)
+        self.assertIn("accuracy", artifacts.evaluation)
+        self.assertIn("macro_f1", artifacts.evaluation)
+        self.assertIn("per_class", artifacts.evaluation)
+        self.assertIn("confusion_matrix", artifacts.evaluation)
+        self.assertGreaterEqual(artifacts.evaluation["accuracy"], 0.0)
+        self.assertLessEqual(artifacts.evaluation["accuracy"], 1.0)
+        self.assertGreater(artifacts.evaluation["per_class"]["BALANCED"]["support"], 0)
+        self.assertGreater(artifacts.evaluation["per_class"]["COLD_DENSE"]["support"], 0)
+
+    def test_run_simulation_supports_ml_policy(self) -> None:
+        train_and_save_model(sample_count=1200, seed=2026)
+
+        baseline, optimized, total_blocks = run_simulation(count=90, seed=11, policy_mode="ml")
+
+        self.assertEqual(total_blocks, 90)
+        self.assertGreater(baseline.avg_latency_ms, 0.0)
+        self.assertGreater(optimized.avg_latency_ms, 0.0)
 
 
 if __name__ == "__main__":

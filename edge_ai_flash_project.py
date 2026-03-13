@@ -14,6 +14,8 @@ from statistics import mean
 import random
 import time
 
+from ml.inference import load_trained_model, predict_profile_zone
+
 try:
     import psutil
 except ImportError:  # pragma: no cover - handled at runtime when live mode is used.
@@ -61,7 +63,24 @@ class EdgeFlashModel:
 
 
 class AIPlacementPolicy:
-    """Heuristic policy standing in for a lightweight AI scoring model."""
+    """Placement policy supporting heuristic and ML-backed inference."""
+
+    _policy_mode = "heuristic"
+    _cached_model = None
+
+    @classmethod
+    def configure(cls, policy_mode: str = "heuristic") -> None:
+        cls._policy_mode = policy_mode
+        if policy_mode == "heuristic":
+            cls._cached_model = None
+            return
+
+        if cls._cached_model is None:
+            cls._cached_model = load_trained_model()
+
+    @classmethod
+    def active_mode(cls) -> str:
+        return cls._policy_mode if cls._policy_mode == "heuristic" or cls._cached_model is not None else "heuristic"
 
     @staticmethod
     def score_hotness(profile: WorkloadProfile) -> float:
@@ -72,12 +91,25 @@ class AIPlacementPolicy:
             + 0.20 * (1.0 - profile.write_ratio)
         )
 
-    @staticmethod
-    def pick_zone(profile: WorkloadProfile, flash: EdgeFlashModel, remaining: dict[str, int]) -> str:
-        hotness = AIPlacementPolicy.score_hotness(profile)
+    @classmethod
+    def priority_score(cls, profile: WorkloadProfile) -> float:
+        if cls.active_mode() == "ml":
+            prediction = predict_profile_zone(profile, cls._cached_model)
+            return prediction.priority_score
+        return cls.score_hotness(profile)
 
+    @classmethod
+    def pick_zone(cls, profile: WorkloadProfile, flash: EdgeFlashModel, remaining: dict[str, int]) -> str:
+        if cls.active_mode() == "ml":
+            preferred = predict_profile_zone(profile, cls._cached_model).zone
+            return cls._pick_zone_with_capacity(preferred, remaining)
+
+        hotness = cls.score_hotness(profile)
         preferred = "HOT_CACHE" if hotness >= 0.70 else "BALANCED" if hotness >= 0.38 else "COLD_DENSE"
+        return cls._pick_zone_with_capacity(preferred, remaining)
 
+    @staticmethod
+    def _pick_zone_with_capacity(preferred: str, remaining: dict[str, int]) -> str:
         if remaining[preferred] > 0:
             return preferred
 
@@ -283,7 +315,7 @@ def simulate_ai_optimized(workloads: list[WorkloadProfile], flash: EdgeFlashMode
     remaining = {z: flash.zones[z]["capacity_blocks"] for z in flash.list_zones()}
     latencies, energies, wear_costs = [], [], []
 
-    for w in sorted(workloads, key=AIPlacementPolicy.score_hotness, reverse=True):
+    for w in sorted(workloads, key=AIPlacementPolicy.priority_score, reverse=True):
         zone_name = AIPlacementPolicy.pick_zone(w, flash, remaining)
         if remaining.get(zone_name, 0) > 0:
             remaining[zone_name] -= 1
@@ -370,10 +402,12 @@ def run_simulation(
     count: int = 220,
     seed: int = 123,
     workloads: list[WorkloadProfile] | None = None,
+    policy_mode: str = "heuristic",
 ) -> tuple[PlacementResult, PlacementResult, int]:
     """Run the baseline and AI-inspired strategies on a workload collection."""
     flash = EdgeFlashModel()
     workloads = workloads if workloads is not None else generate_workloads(count=count, seed=seed)
+    AIPlacementPolicy.configure(policy_mode=policy_mode)
     baseline = simulate_baseline(workloads, flash)
     optimized = simulate_ai_optimized(workloads, flash)
     return baseline, optimized, len(workloads)

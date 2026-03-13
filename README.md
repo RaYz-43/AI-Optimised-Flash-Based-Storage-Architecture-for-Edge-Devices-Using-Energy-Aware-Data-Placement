@@ -1,6 +1,6 @@
 # AI-Optimised Flash Storage for Edge AI
 
-A simulation-based proof of concept that demonstrates how workload-aware flash placement can improve latency, energy use, and throughput for edge AI devices.
+A simulation-based proof of concept showing how a trained machine learning model combined with energy-aware flash placement can improve latency, energy use, and throughput for edge AI devices.
 
 ![Project preview](assets/project-preview.png)
 
@@ -12,48 +12,50 @@ A simulation-based proof of concept that demonstrates how workload-aware flash p
 
 ## What This Project Is
 
-This project is a lightweight storage-systems simulator, not a hardware benchmark. It models flash zones with different performance and energy characteristics, then compares:
+This project is a lightweight storage-systems simulator rather than a hardware benchmark. It models flash zones with different performance and energy characteristics, then compares:
 
 - **Baseline random placement**
-- **AI-inspired workload-aware placement**
+- **ML-guided workload-aware placement**
 
-The current "AI" is an explainable heuristic policy rather than a trained neural network or classifier. That keeps the project transparent, lightweight, and appropriate for a proof-of-concept demo.
+The optimisation path benchmarks multiple tabular classifiers and selects the best performer to predict the most suitable flash zone from workload features such as access frequency, write ratio, temporal reuse, and block size. A heuristic fallback remains in the backend so the simulator stays robust even if the saved model artifact is unavailable.
 
 ## Why this project stands out
 
 This project moves beyond a generic storage simulation by framing the problem around **edge AI workloads** such as video analytics, sensor fusion, and model caching.
 
-The goal is to show how intelligent workload-aware storage decisions can reduce latency, lower energy use, and improve throughput.
+The goal is to show how workload-aware storage decisions can reduce latency, lower energy use, and improve throughput.
 
 ## Project idea upgrade
 
-To make the project more impressive for lecturers, recruiters, or GitHub visitors, position it as a:
+For lecturers, recruiters, or GitHub visitors, position the project as a:
 
 **Lightweight Edge-AI Storage Optimisation Simulator**
 
 That tells a stronger story than just “flash architecture.” It shows:
 
 - systems thinking
-- AI-inspired decision logic
+- applied machine learning
 - performance engineering
 - energy-efficiency awareness
 - practical experimentation
 
 ## Current features
 
-- Synthetic edge workload generation
+- Synthetic benchmark workload generation for repeatable evaluation
 - Live telemetry mode using process-level disk I/O activity captured from the local machine
 - Zone-based flash model with different latency, energy, and wear profiles
-- AI-inspired hotness scoring policy
+- Offline-trained placement model selected by benchmark comparison (currently Gradient Boosting)
+- Hidden heuristic fallback for robustness if the saved model is unavailable
 - Capacity-aware block placement
 - Placement-aware scheduling bonuses for matched data-zone behavior
 - Baseline vs optimised comparison report
+- Saved training dataset and model artifact for reproducibility
 - Unit tests and GitHub Actions CI
 - Browser-based Streamlit demo for presentation
 
 ## Verified sample results
 
-Using the default synthetic simulation setup:
+Using the default synthetic benchmark setup, a representative run produced:
 
 - **Latency reduction:** 12.46%
 - **Energy reduction:** 11.62%
@@ -64,6 +66,8 @@ Using the default synthetic simulation setup:
 
 - [edge_ai_flash_project.py](edge_ai_flash_project.py) — main simulation script
 - [app.py](app.py) — Streamlit demo application
+- [ml/training.py](ml/training.py) — model training pipeline and artifact export
+- [ml/inference.py](ml/inference.py) — runtime model loading and zone prediction
 - [tests/test_edge_ai_flash_project.py](tests/test_edge_ai_flash_project.py) — unit tests
 - [.github/workflows/python-ci.yml](.github/workflows/python-ci.yml) — GitHub Actions CI
 - [.gitignore](.gitignore) — ignores Python cache and local environment files
@@ -83,7 +87,39 @@ python -m pip install -r requirements.txt
 python edge_ai_flash_project.py
 ```
 
-Expected result: a report comparing baseline and AI-optimised placement.
+Expected result: a report comparing the baseline strategy with ML-guided placement.
+
+## ML pipeline
+
+The ML-backed placement flow is:
+
+1. Generate or capture workloads
+2. Extract workload features
+3. Predict the best flash zone with the highest-scoring benchmarked classifier
+4. Apply capacity-aware placement in the simulator
+5. Compare results against baseline random placement
+
+The trained model artifact is stored in `data/model.joblib`, and the generated labeled training dataset is stored in `data/training_workloads.csv`.
+
+The training artifact also stores hold-out evaluation metrics, including accuracy, macro precision, macro recall, macro F1, weighted F1, and a confusion matrix.
+
+### Model comparison (same hold-out split)
+
+The training pipeline benchmarks three candidate models on the same 80/20 hold-out split and selects the model with the highest **macro F1** (best balance across all classes, including minority classes).
+
+| Model | Accuracy | Macro F1 | Weighted F1 |
+|---|---:|---:|---:|
+| Logistic Regression | 0.8833 | 0.8596 | 0.8878 |
+| Random Forest | 0.9125 | 0.8722 | 0.9114 |
+| **Gradient Boosting (selected)** | **0.9292** | **0.8939** | **0.9272** |
+
+Why this winner: Gradient Boosting achieved the highest macro F1, so it provided the best class-balanced performance for this dataset.
+
+To regenerate the model and print the evaluation metrics:
+
+```bash
+python -m ml.training
+```
 
 ## How to run the web demo
 
@@ -92,13 +128,15 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The browser demo lets you switch between a controlled synthetic workload and a short live telemetry capture from the current machine.
+The browser demo lets you switch between a controlled synthetic benchmark workload and a short live telemetry capture from the current machine. The presentation flow always uses the ML-backed placement engine.
 
 ## Live telemetry mode
 
 The web demo supports a real-time capture mode. During a short capture window, it samples current process disk I/O counters and converts that activity into workload profiles for the simulator.
 
 This is more realistic than synthetic generation, but it is still **process-level telemetry**, not raw flash-controller logs or true block-level NAND tracing.
+
+Synthetic mode remains useful as a controlled benchmark source for repeatable demos, testing, and model training.
 
 Good activities for testing live mode:
 
@@ -119,11 +157,11 @@ All tests should pass before presenting or pushing changes.
 
 If you need one sentence for a demo:
 
-> This project is a simulation-based proof of concept for AI-aware flash placement on edge devices, showing that workload-aware storage decisions can reduce latency and energy use while improving throughput.
+> This project is a simulation-based proof of concept for ML-guided flash placement on edge devices, showing that workload-aware storage decisions can reduce latency and energy use while improving throughput.
 
 ## Example project pitch
 
-> Edge devices increasingly run AI workloads, but their flash storage is usually managed with generic strategies that ignore workload behavior. This project simulates an AI-optimised flash placement layer that analyses access frequency, write intensity, and data reuse to place blocks more efficiently. The result is lower latency, reduced energy consumption, and better throughput for next-generation edge systems.
+> Edge devices increasingly run AI workloads, but their flash storage is often managed with generic strategies that ignore workload behavior. This project simulates an ML-optimised flash placement layer that extracts workload features and uses the best-performing benchmarked classifier to guide data placement across flash zones. The result is lower latency, reduced energy consumption, and better throughput for next-generation edge systems.
 
 ## GitHub checklist
 
@@ -137,7 +175,7 @@ A strong beginner-friendly GitHub repo should include:
 - CI workflow
 - future roadmap
 
-This repository now includes the core pieces.
+This repository includes the core pieces expected in a strong beginner-friendly research or portfolio project.
 
 ## Suggested future upgrades
 
@@ -148,7 +186,7 @@ If you want to push this further, add one or more of these:
 3. **CLI arguments**: choose workload size, random seed, or capture duration
 4. **Results export**: save JSON or CSV reports for analysis
 5. **Charts**: add richer visual comparisons and trend history
-6. **Real ML model**: replace the heuristic scoring policy with a trained classifier or regressor
+6. **Model selection expansion**: add XGBoost/LightGBM and cross-validation-based benchmarking
 
 ## License
 
