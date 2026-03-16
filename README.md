@@ -47,6 +47,7 @@ That tells a stronger story than just “flash architecture.” It shows:
 - Offline-trained placement model selected by benchmark comparison (currently Gradient Boosting)
 - Hidden heuristic fallback for robustness if the saved model is unavailable
 - Capacity-aware block placement
+- Capacity-aware overflow handling when workload demand exceeds physical flash capacity
 - Placement-aware scheduling bonuses for matched data-zone behavior
 - Baseline vs optimised comparison report
 - Saved training dataset and model artifact for reproducibility
@@ -57,10 +58,20 @@ That tells a stronger story than just “flash architecture.” It shows:
 
 Using the default synthetic benchmark setup, a representative run produced:
 
-- **Latency reduction:** 12.46%
-- **Energy reduction:** 11.62%
-- **Wear-cost reduction:** 0.57%
-- **Throughput increase:** 14.23%
+- **Latency reduction:** 12.21%
+- **Energy reduction:** 10.88%
+- **Wear-cost reduction:** 0.12%
+- **Throughput increase:** 13.90%
+
+## Capacity model and workload size
+
+The simulator models a fixed physical flash capacity of 250 blocks across three zones:
+
+- HOT_CACHE: 75 blocks
+- BALANCED: 105 blocks
+- COLD_DENSE: 70 blocks
+
+In the web UI, you can run synthetic workloads up to 500 blocks. For runs above 250 blocks, the simulator now applies an explicit overflow pressure model instead of silently forcing all overflow into one zone. This keeps high-load experiments interpretable and avoids an artificial quality cliff immediately after the physical-capacity threshold.
 
 ## Repository structure
 

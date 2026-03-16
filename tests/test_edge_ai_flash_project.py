@@ -8,6 +8,7 @@ from edge_ai_flash_project import (
     WorkloadProfile,
     build_workloads_from_live_activity,
     generate_workloads,
+    get_last_simulation_diagnostics,
     run_simulation,
     simulate_ai_optimized,
     simulate_baseline,
@@ -122,6 +123,25 @@ class EdgeAIFlashProjectTests(unittest.TestCase):
         self.assertEqual(total_blocks, 90)
         self.assertGreater(baseline.avg_latency_ms, 0.0)
         self.assertGreater(optimized.avg_latency_ms, 0.0)
+
+    def test_overflow_is_tracked_when_workload_exceeds_capacity(self) -> None:
+        baseline, optimized, total_blocks = run_simulation(count=500, seed=123)
+        diagnostics = get_last_simulation_diagnostics()
+
+        self.assertEqual(total_blocks, 500)
+        self.assertGreater(baseline.avg_latency_ms, 0.0)
+        self.assertGreater(optimized.avg_latency_ms, 0.0)
+        self.assertEqual(diagnostics["total_capacity"], 250)
+        self.assertEqual(diagnostics["optimized"]["overflow_count"], 250)
+        self.assertEqual(diagnostics["baseline"]["overflow_count"], 250)
+
+    def test_optimized_overflow_spreads_across_non_cold_zones(self) -> None:
+        run_simulation(count=500, seed=321)
+        diagnostics = get_last_simulation_diagnostics()
+        overflow_by_zone = diagnostics["optimized"]["overflow_by_zone"]
+
+        self.assertGreater(sum(overflow_by_zone.values()), 0)
+        self.assertGreater(overflow_by_zone["HOT_CACHE"] + overflow_by_zone["BALANCED"], 0)
 
 
 if __name__ == "__main__":

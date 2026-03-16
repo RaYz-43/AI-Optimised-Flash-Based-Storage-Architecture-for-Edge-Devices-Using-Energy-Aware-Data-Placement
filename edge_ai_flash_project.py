@@ -44,6 +44,10 @@ class PlacementResult:
     throughput_ops_per_s: float
 
 
+LAST_SIMULATION_DIAGNOSTICS: dict[str, object] = {}
+OVERFLOW_ZONE = {"latency_ms": 1.65, "energy_mj": 1.22, "wear_factor": 1.02}
+
+
 class EdgeFlashModel:
     """Simple flash model with zones tuned for different workload behavior."""
 
@@ -95,35 +99,56 @@ class AIPlacementPolicy:
     def priority_score(cls, profile: WorkloadProfile) -> float:
         if cls.active_mode() == "ml":
             prediction = predict_profile_zone(profile, cls._cached_model)
-            return prediction.priority_score
+            hotness = cls.score_hotness(profile)
+            return 0.70 * hotness + 0.30 * prediction.priority_score
         return cls.score_hotness(profile)
 
     @classmethod
-    def pick_zone(cls, profile: WorkloadProfile, flash: EdgeFlashModel, remaining: dict[str, int]) -> str:
+    def _preferred_zone(cls, profile: WorkloadProfile) -> str:
         if cls.active_mode() == "ml":
-            preferred = predict_profile_zone(profile, cls._cached_model).zone
-            return cls._pick_zone_with_capacity(preferred, remaining)
+            predicted_zone = predict_profile_zone(profile, cls._cached_model).zone
+            hotness = cls.score_hotness(profile)
+
+            # Guardrails keep ML placement aligned with known flash-zone behavior.
+            if hotness >= 0.68 and profile.write_ratio <= 0.66 and profile.block_size_kb <= 32:
+                return "HOT_CACHE"
+            if hotness <= 0.34 or (hotness <= 0.40 and profile.block_size_kb >= 32):
+                return "COLD_DENSE"
+            if predicted_zone == "HOT_CACHE" and (profile.write_ratio > 0.72 or profile.block_size_kb >= 64):
+                return "BALANCED"
+            if predicted_zone == "COLD_DENSE" and hotness > 0.55:
+                return "BALANCED"
+
+            return predicted_zone
 
         hotness = cls.score_hotness(profile)
-        preferred = "HOT_CACHE" if hotness >= 0.70 else "BALANCED" if hotness >= 0.38 else "COLD_DENSE"
-        return cls._pick_zone_with_capacity(preferred, remaining)
+        return "HOT_CACHE" if hotness >= 0.70 else "BALANCED" if hotness >= 0.38 else "COLD_DENSE"
 
-    @staticmethod
-    def _pick_zone_with_capacity(preferred: str, remaining: dict[str, int]) -> str:
-        if remaining[preferred] > 0:
-            return preferred
+    @classmethod
+    def choose_zone(cls, profile: WorkloadProfile, remaining: dict[str, int]) -> tuple[str, bool]:
+        preferred = cls._preferred_zone(profile)
 
-        # Capacity fallback: choose next best available zone.
+        if remaining.get(preferred, 0) > 0:
+            return preferred, False
+
         candidates = [z for z, cap in remaining.items() if cap > 0]
-        if not candidates:
-            # In a real system, this would trigger compaction/eviction.
-            return "COLD_DENSE"
+        if candidates:
+            if preferred == "HOT_CACHE":
+                fallback = "BALANCED" if "BALANCED" in candidates else candidates[0]
+            elif preferred == "BALANCED":
+                fallback = "HOT_CACHE" if "HOT_CACHE" in candidates else candidates[0]
+            else:
+                fallback = "BALANCED" if "BALANCED" in candidates else candidates[0]
+            return fallback, False
 
-        if preferred == "HOT_CACHE":
-            return "BALANCED" if "BALANCED" in candidates else candidates[0]
-        if preferred == "BALANCED":
-            return "HOT_CACHE" if "HOT_CACHE" in candidates else candidates[0]
-        return "BALANCED" if "BALANCED" in candidates else candidates[0]
+        # Once all zones are full, continue honoring the preferred tier and apply
+        # an overflow penalty in the simulator to represent queueing/spill pressure.
+        return preferred, True
+
+    @classmethod
+    def pick_zone(cls, profile: WorkloadProfile, _flash: EdgeFlashModel, remaining: dict[str, int]) -> str:
+        zone_name, _ = cls.choose_zone(profile, remaining)
+        return zone_name
 
 
 def clamp_unit(value: float) -> float:
@@ -289,20 +314,66 @@ def evaluate_operation(profile: WorkloadProfile, zone: dict[str, float]) -> tupl
     return latency, energy, wear
 
 
-def simulate_baseline(workloads: list[WorkloadProfile], flash: EdgeFlashModel) -> PlacementResult:
+def apply_overflow_penalty(
+    latency: float,
+    energy: float,
+    wear: float,
+    overflow_rank: int,
+) -> tuple[float, float, float]:
+    """Apply queueing pressure when workload demand exceeds total physical capacity."""
+    latency_scale, energy_scale, wear_scale = 1.08, 1.05, 1.03
+    depth_scale = 1.0 + min(0.30, 0.0025 * overflow_rank)
+    return latency * latency_scale * depth_scale, energy * energy_scale * depth_scale, wear * wear_scale * depth_scale
+
+
+def _random_zone_with_capacity(remaining: dict[str, int], zones: list[str]) -> tuple[str, bool]:
+    preferred = random.choice(zones)
+    if remaining.get(preferred, 0) > 0:
+        return preferred, False
+
+    candidates = [z for z, cap in remaining.items() if cap > 0]
+    if candidates:
+        return random.choice(candidates), False
+
+    return preferred, True
+
+
+def simulate_baseline(
+    workloads: list[WorkloadProfile],
+    flash: EdgeFlashModel,
+    return_stats: bool = False,
+) -> PlacementResult | tuple[PlacementResult, dict[str, object]]:
     zones = flash.list_zones()
+    remaining = {z: flash.zones[z]["capacity_blocks"] for z in zones}
     latencies, energies, wear_costs = [], [], []
+    overflow_count = 0
+    overflow_by_zone = {z: 0 for z in zones}
+    assignment_counts = {z: 0 for z in zones}
 
     for w in workloads:
-        zone_name = random.choice(zones)
-        zone = flash.zones[zone_name]
+        zone_name, is_overflow = _random_zone_with_capacity(remaining, zones)
+        assignment_counts[zone_name] += 1
+
+        if remaining.get(zone_name, 0) > 0:
+            remaining[zone_name] -= 1
+
+        zone = OVERFLOW_ZONE if is_overflow else flash.zones[zone_name]
         latency, energy, wear = evaluate_operation(w, zone)
+
+        if not is_overflow and zone_name == "COLD_DENSE" and w.write_ratio > 0.65:
+            latency *= 1.06
+
+        if is_overflow:
+            overflow_count += 1
+            overflow_by_zone[zone_name] += 1
+            latency, energy, wear = apply_overflow_penalty(latency, energy, wear, overflow_rank=overflow_count)
+
         latencies.append(latency)
         energies.append(energy)
         wear_costs.append(wear)
 
     throughput = 1000.0 / mean(latencies)
-    return PlacementResult(
+    result = PlacementResult(
         name="Baseline (Random Placement)",
         avg_latency_ms=mean(latencies),
         avg_energy_mj=mean(energies),
@@ -310,49 +381,87 @@ def simulate_baseline(workloads: list[WorkloadProfile], flash: EdgeFlashModel) -
         throughput_ops_per_s=throughput,
     )
 
+    if not return_stats:
+        return result
 
-def simulate_ai_optimized(workloads: list[WorkloadProfile], flash: EdgeFlashModel) -> PlacementResult:
+    return result, {
+        "overflow_count": overflow_count,
+        "overflow_by_zone": overflow_by_zone,
+        "assignment_counts": assignment_counts,
+        "remaining_capacity": remaining,
+    }
+
+
+def simulate_ai_optimized(
+    workloads: list[WorkloadProfile],
+    flash: EdgeFlashModel,
+    return_stats: bool = False,
+) -> PlacementResult | tuple[PlacementResult, dict[str, object]]:
     remaining = {z: flash.zones[z]["capacity_blocks"] for z in flash.list_zones()}
     latencies, energies, wear_costs = [], [], []
+    overflow_count = 0
+    overflow_by_zone = {z: 0 for z in flash.list_zones()}
+    assignment_counts = {z: 0 for z in flash.list_zones()}
 
     for w in sorted(workloads, key=AIPlacementPolicy.priority_score, reverse=True):
-        zone_name = AIPlacementPolicy.pick_zone(w, flash, remaining)
+        zone_name, is_overflow = AIPlacementPolicy.choose_zone(w, remaining)
+        assignment_counts[zone_name] += 1
+
         if remaining.get(zone_name, 0) > 0:
             remaining[zone_name] -= 1
 
-        zone = flash.zones[zone_name]
+        zone = OVERFLOW_ZONE if is_overflow else flash.zones[zone_name]
         latency, energy, wear = evaluate_operation(w, zone)
         hotness = AIPlacementPolicy.score_hotness(w)
 
         # Placement-aware scheduling bonus: matching block behavior to the right
         # zone reduces queueing, migration, and redundant movement.
-        if zone_name == "HOT_CACHE" and hotness > 0.60:
+        if not is_overflow and zone_name == "HOT_CACHE" and hotness > 0.60:
             latency *= 0.68
             energy *= 0.78
-        elif zone_name == "BALANCED" and 0.36 <= hotness < 0.60:
+        elif not is_overflow and zone_name == "BALANCED" and 0.36 <= hotness < 0.60:
             latency *= 0.88
             energy *= 0.90
-        elif zone_name == "COLD_DENSE" and hotness < 0.36:
+        elif not is_overflow and zone_name == "COLD_DENSE" and hotness < 0.36:
             latency *= 0.84
             energy *= 0.74
             wear *= 0.94
 
         # Write-heavy data in cold zone gets a latency penalty.
-        if zone_name == "COLD_DENSE" and w.write_ratio > 0.65:
+        if not is_overflow and zone_name == "COLD_DENSE" and w.write_ratio > 0.65:
             latency *= 1.06
+
+        if is_overflow:
+            overflow_count += 1
+            overflow_by_zone[zone_name] += 1
+            latency, energy, wear = apply_overflow_penalty(latency, energy, wear, overflow_rank=overflow_count)
 
         latencies.append(latency)
         energies.append(energy)
         wear_costs.append(wear)
 
     throughput = 1000.0 / mean(latencies)
-    return PlacementResult(
+    result = PlacementResult(
         name="AI-Optimized (Energy-Aware)",
         avg_latency_ms=mean(latencies),
         avg_energy_mj=mean(energies),
         avg_wear_cost=mean(wear_costs),
         throughput_ops_per_s=throughput,
     )
+
+    if not return_stats:
+        return result
+
+    return result, {
+        "overflow_count": overflow_count,
+        "overflow_by_zone": overflow_by_zone,
+        "assignment_counts": assignment_counts,
+        "remaining_capacity": remaining,
+    }
+
+
+def get_last_simulation_diagnostics() -> dict[str, object]:
+    return LAST_SIMULATION_DIAGNOSTICS
 
 
 def print_report(baseline: PlacementResult, optimized: PlacementResult, total_blocks: int) -> None:
@@ -408,8 +517,18 @@ def run_simulation(
     flash = EdgeFlashModel()
     workloads = workloads if workloads is not None else generate_workloads(count=count, seed=seed)
     AIPlacementPolicy.configure(policy_mode=policy_mode)
-    baseline = simulate_baseline(workloads, flash)
-    optimized = simulate_ai_optimized(workloads, flash)
+    baseline, baseline_stats = simulate_baseline(workloads, flash, return_stats=True)
+    optimized, optimized_stats = simulate_ai_optimized(workloads, flash, return_stats=True)
+
+    global LAST_SIMULATION_DIAGNOSTICS
+    LAST_SIMULATION_DIAGNOSTICS = {
+        "workload_count": len(workloads),
+        "total_capacity": sum(int(flash.zones[z]["capacity_blocks"]) for z in flash.list_zones()),
+        "baseline": baseline_stats,
+        "optimized": optimized_stats,
+        "policy_mode": AIPlacementPolicy.active_mode(),
+    }
+
     return baseline, optimized, len(workloads)
 
 

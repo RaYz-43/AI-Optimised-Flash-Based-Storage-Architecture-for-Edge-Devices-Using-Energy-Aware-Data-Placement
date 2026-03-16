@@ -6,6 +6,7 @@ import streamlit as st
 from edge_ai_flash_project import (
     PlacementResult,
     capture_live_process_workloads,
+    get_last_simulation_diagnostics,
     run_simulation,
 )
 from ml.inference import get_model_evaluation, load_trained_model
@@ -303,7 +304,7 @@ with st.sidebar:
         live_capture_seconds = st.slider("Capture duration (seconds)", min_value=4, max_value=20, value=8, step=2)
         st.caption("Samples real-time process disk I/O counters and converts them into workload profiles.")
 
-    run_clicked = st.button("Run simulation", type="primary", use_container_width=True)
+    run_clicked = st.button("Run simulation", type="primary", width="stretch")
     st.markdown(
         f"""
         <div class="mono-text">
@@ -344,6 +345,18 @@ baseline, optimized, total_blocks = result_bundle["results"]
 source_label = result_bundle["source_label"]
 source_note = result_bundle["source_note"]
 model_evaluation = get_model_evaluation(model_artifact)
+diagnostics = get_last_simulation_diagnostics()
+total_capacity = int(diagnostics.get("total_capacity", 0)) if diagnostics else 0
+optimized_overflow = int(diagnostics.get("optimized", {}).get("overflow_count", 0)) if diagnostics else 0
+baseline_overflow = int(diagnostics.get("baseline", {}).get("overflow_count", 0)) if diagnostics else 0
+
+if total_capacity > 0:
+    st.caption(f"Flash capacity model: {total_capacity} blocks across HOT_CACHE, BALANCED, and COLD_DENSE zones.")
+if optimized_overflow > 0 or baseline_overflow > 0:
+    st.info(
+        "Capacity pressure detected: workload demand exceeded physical capacity. "
+        f"Overflow handling applied to {optimized_overflow} AI-optimized blocks and {baseline_overflow} baseline blocks."
+    )
 
 latency_gain = improvement(baseline.avg_latency_ms, optimized.avg_latency_ms)
 energy_gain = improvement(baseline.avg_energy_mj, optimized.avg_energy_mj)
@@ -432,6 +445,20 @@ with impact_col:
 
 st.caption(f"Current input: {source_label}. Placement model: {selected_model_name}.")
 
+if diagnostics:
+    optimized_zone_mix = diagnostics.get("optimized", {}).get("assignment_counts", {})
+    baseline_zone_mix = diagnostics.get("baseline", {}).get("assignment_counts", {})
+    mix_frame = pd.DataFrame(
+        {
+            "Baseline": baseline_zone_mix,
+            "AI-Optimized": optimized_zone_mix,
+        }
+    ).fillna(0)
+    with st.container(border=True):
+        st.subheader("Zone Assignment Mix")
+        st.dataframe(mix_frame.astype(int), width="stretch")
+        st.caption("Shows how many blocks were assigned to each zone during this run.")
+
 if model_evaluation is not None:
     metric_col, class_col = st.columns([0.9, 1.1])
 
@@ -463,4 +490,4 @@ if model_evaluation is not None:
             confusion = model_evaluation["confusion_matrix"]
             confusion_frame = pd.DataFrame(confusion["values"], index=confusion["labels"], columns=confusion["labels"])
             st.caption("Confusion matrix on the hold-out set. Rows represent true labels and columns represent predicted labels.")
-            st.dataframe(confusion_frame, use_container_width=True)
+            st.dataframe(confusion_frame, width="stretch")
