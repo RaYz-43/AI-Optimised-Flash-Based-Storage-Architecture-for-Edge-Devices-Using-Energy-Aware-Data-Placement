@@ -61,10 +61,6 @@ st.markdown(
         border-right: 1px solid rgba(194, 65, 12, 0.12);
     }
 
-    [data-testid="stSidebar"] * {
-        font-family: 'Space Grotesk', sans-serif;
-    }
-
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background: var(--panel);
         border: 1px solid var(--border);
