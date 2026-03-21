@@ -1,4 +1,4 @@
-﻿"""Simulation core for AI-optimised flash placement on edge devices.
+"""Simulation core for AI-optimised flash placement on edge devices.
 
 This module provides:
 - synthetic workload generation
@@ -326,14 +326,14 @@ def apply_overflow_penalty(
     return latency * latency_scale * depth_scale, energy * energy_scale * depth_scale, wear * wear_scale * depth_scale
 
 
-def _random_zone_with_capacity(remaining: dict[str, int], zones: list[str]) -> tuple[str, bool]:
-    preferred = random.choice(zones)
+def _random_zone_with_capacity(remaining: dict[str, int], zones: list[str], rng: random.Random) -> tuple[str, bool]:
+    preferred = rng.choice(zones)
     if remaining.get(preferred, 0) > 0:
         return preferred, False
 
     candidates = [z for z, cap in remaining.items() if cap > 0]
     if candidates:
-        return random.choice(candidates), False
+        return rng.choice(candidates), False
 
     return preferred, True
 
@@ -342,8 +342,10 @@ def simulate_baseline(
     workloads: list[WorkloadProfile],
     flash: EdgeFlashModel,
     return_stats: bool = False,
+    seed: int = 123,
 ) -> PlacementResult | tuple[PlacementResult, dict[str, object]]:
     zones = flash.list_zones()
+    rng = random.Random(seed)
     remaining = {z: flash.zones[z]["capacity_blocks"] for z in zones}
     latencies, energies, wear_costs = [], [], []
     overflow_count = 0
@@ -351,7 +353,7 @@ def simulate_baseline(
     assignment_counts = {z: 0 for z in zones}
 
     for w in workloads:
-        zone_name, is_overflow = _random_zone_with_capacity(remaining, zones)
+        zone_name, is_overflow = _random_zone_with_capacity(remaining, zones, rng)
         assignment_counts[zone_name] += 1
 
         if remaining.get(zone_name, 0) > 0:
@@ -517,7 +519,7 @@ def run_simulation(
     flash = EdgeFlashModel()
     workloads = workloads if workloads is not None else generate_workloads(count=count, seed=seed)
     AIPlacementPolicy.configure(policy_mode=policy_mode)
-    baseline, baseline_stats = simulate_baseline(workloads, flash, return_stats=True)
+    baseline, baseline_stats = simulate_baseline(workloads, flash, return_stats=True, seed=seed)
     optimized, optimized_stats = simulate_ai_optimized(workloads, flash, return_stats=True)
 
     global LAST_SIMULATION_DIAGNOSTICS

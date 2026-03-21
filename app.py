@@ -133,38 +133,6 @@ st.markdown(
         font-size: 0.98rem;
     }
 
-    .section-card {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 24px;
-        padding: 1.25rem 1.35rem;
-        box-shadow: var(--shadow);
-    }
-
-    .note-card {
-        background: linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(255, 247, 234, 0.94));
-        border: 1px solid rgba(194, 65, 12, 0.14);
-        border-radius: 24px;
-        padding: 1.25rem 1.35rem;
-        box-shadow: var(--shadow);
-    }
-
-    .note-card h4,
-    .section-card h4 {
-        margin: 0 0 0.7rem 0;
-        font-size: 1.02rem;
-    }
-
-    .note-card ol {
-        margin: 0;
-        padding-left: 1.15rem;
-    }
-
-    .note-card li {
-        margin-bottom: 0.65rem;
-        line-height: 1.55;
-    }
-
     .impact-strip {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -283,7 +251,7 @@ def describe_workload_source(workload_mode: str, seed: int, live_capture_seconds
 model_artifact = load_trained_model()
 selected_model_name = "Heuristic fallback"
 if model_artifact is not None:
-    selected_model_name = str(model_artifact.get("model_name", "Random Forest"))
+    selected_model_name = str(model_artifact.get("model_name", "Gradient Boosting"))
 
 
 with st.sidebar:
@@ -477,6 +445,9 @@ if model_evaluation is not None:
             st.caption(
                 f"Hold-out evaluation on {model_evaluation['test_size']} test samples after training on {model_evaluation['train_size']} samples."
             )
+            st.info(
+                "Why F1 is emphasized: zone classes are not perfectly balanced, so Macro F1 gives equal importance to each class and avoids inflated performance claims from majority-class accuracy."
+            )
 
     with class_col:
         with st.container(border=True):
@@ -487,3 +458,69 @@ if model_evaluation is not None:
             confusion_frame = pd.DataFrame(confusion["values"], index=confusion["labels"], columns=confusion["labels"])
             st.caption("Confusion matrix on the hold-out set. Rows represent true labels and columns represent predicted labels.")
             st.dataframe(confusion_frame, width="stretch")
+
+comparison = model_artifact.get("comparison", {}) if model_artifact is not None else {}
+if comparison:
+    with st.container(border=True):
+        st.subheader("Model Benchmark (Same Dataset & Same Hold-out Split)")
+        rows = []
+        for name, metrics in comparison.items():
+            rows.append(
+                {
+                    "Model": name,
+                    "Accuracy": metrics["accuracy"],
+                    "Macro F1": metrics["macro_f1"],
+                    "Weighted F1": metrics["weighted_f1"],
+                    "Macro Precision": metrics["macro_precision"],
+                    "Macro Recall": metrics["macro_recall"],
+                }
+            )
+        benchmark_frame = pd.DataFrame(rows).sort_values(by="Macro F1", ascending=False)
+        st.dataframe(
+            benchmark_frame.style.format(
+                {
+                    "Accuracy": "{:.4f}",
+                    "Macro F1": "{:.4f}",
+                    "Weighted F1": "{:.4f}",
+                    "Macro Precision": "{:.4f}",
+                    "Macro Recall": "{:.4f}",
+                }
+            ),
+            width="stretch",
+        )
+
+        macro_f1_chart = benchmark_frame[["Model", "Macro F1"]].set_index("Model")
+        st.bar_chart(macro_f1_chart, color="#0f766e")
+        st.caption("Macro F1 chart across the three candidate models. Higher is better.")
+
+        st.success(f"Selected model: {selected_model_name} (highest Macro F1)")
+        top_model_name = str(benchmark_frame.iloc[0]["Model"])
+        st.info(
+            f"Model selection rationale: {top_model_name} achieved the best class-balanced performance on the same train/test split, so it is selected for deployment."
+        )
+        st.caption(
+            "Fairness check: all three models are trained and tested on the same dataset, with the same feature set and the same hold-out split."
+        )
+
+feature_importance = model_evaluation.get("feature_importance") if model_evaluation is not None else None
+if feature_importance:
+    with st.container(border=True):
+        st.subheader("Feature Importance (Selected Model)")
+        fi_frame = pd.DataFrame(
+            {
+                "Feature": list(feature_importance.keys()),
+                "Importance": list(feature_importance.values()),
+            }
+        )
+        st.bar_chart(fi_frame.set_index("Feature"), color="#1d4ed8")
+        st.caption("Relative importance from the selected model. Higher values indicate stronger influence on zone prediction.")
+
+with st.container(border=True):
+    st.subheader("Demo Explanation Mode")
+    st.markdown(
+        """
+- Baseline assigns blocks randomly, then suffers from capacity and behavior mismatch penalties.
+- AI-Optimized predicts a suitable zone first, then applies energy-aware scheduling bonuses.
+- This creates a fair baseline-vs-optimized comparison under identical workload input.
+        """
+    )

@@ -5,10 +5,12 @@ from pathlib import Path
 from collections import Counter
 
 import joblib
-from sklearn.linear_model import LogisticRegression
+import numpy as np
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_fscore_support
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_fscore_support, classification_report
 from sklearn.model_selection import train_test_split
 
 from edge_ai_flash_project import generate_workloads
@@ -28,8 +30,46 @@ class TrainingArtifacts:
     evaluation: dict[str, object]
 
 
+class LinearRegressionClassifier(BaseEstimator, ClassifierMixin):
+    """Linear regression adapted for 3-class zone prediction.
+
+    The model is trained on ordinal class indices. During inference, continuous
+    predictions are converted to class probabilities based on distance to each
+    class centroid, then mapped to the most probable class.
+    """
+
+    def __init__(self):
+        self.regressor = LinearRegression()
+        self.classes_ = np.array(ZONE_NAMES)
+        self._class_to_index = {label: idx for idx, label in enumerate(ZONE_NAMES)}
+
+    def fit(self, x, y):
+        y_indices = np.array([self._class_to_index[label] for label in y], dtype=float)
+        self.regressor.fit(x, y_indices)
+        return self
+
+    def _score_distances(self, x) -> np.ndarray:
+        continuous = self.regressor.predict(x)
+        class_indices = np.arange(len(self.classes_), dtype=float)
+        # Smaller distance means higher affinity.
+        distances = np.abs(continuous[:, None] - class_indices[None, :])
+        logits = -distances
+        exp_logits = np.exp(logits - logits.max(axis=1, keepdims=True))
+        return exp_logits / exp_logits.sum(axis=1, keepdims=True)
+
+    def predict_proba(self, x):
+        return self._score_distances(x)
+
+    def predict(self, x):
+        probabilities = self.predict_proba(x)
+        class_indices = probabilities.argmax(axis=1)
+        return self.classes_[class_indices]
+
+
+
 def heuristic_hotness(profile) -> float:
     return 0.50 * profile.access_frequency + 0.30 * profile.temporal_reuse + 0.20 * (1.0 - profile.write_ratio)
+
 
 
 def preferred_zone_for_profile(profile) -> str:
@@ -42,37 +82,52 @@ def preferred_zone_for_profile(profile) -> str:
     return "BALANCED"
 
 
-def build_classifier(seed: int) -> RandomForestClassifier:
-    return RandomForestClassifier(
-        n_estimators=220,
-        max_depth=8,
-        min_samples_leaf=2,
-        class_weight="balanced",
-        random_state=seed,
-    )
-
 
 def build_candidates(seed: int):
     """Candidate models for benchmark comparison on identical holdout data."""
     return {
-        "Logistic Regression": LogisticRegression(
+        "Decision Tree": DecisionTreeClassifier(
+            max_depth=6,
+            min_samples_leaf=4,
             class_weight="balanced",
-            max_iter=1000,
             random_state=seed,
         ),
-        "Random Forest": build_classifier(seed),
+        "Linear Regression (as classifier)": LinearRegressionClassifier(),
         "Gradient Boosting": GradientBoostingClassifier(
-            n_estimators=200,
-            max_depth=4,
+            n_estimators=220,
+            max_depth=3,
+            learning_rate=0.08,
             random_state=seed,
         ),
     }
+
 
 
 def generate_labeled_workloads(sample_count: int = 1200, seed: int = 2026):
     workloads = generate_workloads(count=sample_count, seed=seed)
     labels = [preferred_zone_for_profile(profile) for profile in workloads]
     return workloads, labels
+
+
+
+def _extract_feature_importance(classifier) -> dict[str, float] | None:
+    if hasattr(classifier, "feature_importances_"):
+        values = np.asarray(classifier.feature_importances_, dtype=float)
+    elif hasattr(classifier, "coef_"):
+        values = np.asarray(classifier.coef_, dtype=float)
+        if values.ndim > 1:
+            values = np.mean(np.abs(values), axis=0)
+        else:
+            values = np.abs(values)
+    else:
+        return None
+
+    if values.sum() > 0:
+        values = values / values.sum()
+
+    ranked = sorted(zip(FEATURE_COLUMNS, values.tolist()), key=lambda item: item[1], reverse=True)
+    return {name: float(score) for name, score in ranked}
+
 
 
 def evaluate_classifier(classifier, train_features, test_features, train_labels, test_labels) -> dict[str, object]:
@@ -99,8 +154,15 @@ def evaluate_classifier(classifier, train_features, test_features, train_labels,
         zero_division=0,
     )
     confusion = confusion_matrix(test_labels, predicted_labels, labels=ZONE_NAMES)
+    class_report = classification_report(
+        test_labels,
+        predicted_labels,
+        labels=ZONE_NAMES,
+        output_dict=True,
+        zero_division=0,
+    )
 
-    return {
+    evaluation = {
         "train_size": int(len(train_features)),
         "test_size": int(len(test_features)),
         "accuracy": float(accuracy_score(test_labels, predicted_labels)),
@@ -119,11 +181,19 @@ def evaluate_classifier(classifier, train_features, test_features, train_labels,
             }
             for index, label in enumerate(ZONE_NAMES)
         },
+        "classification_report": class_report,
         "confusion_matrix": {
             "labels": ZONE_NAMES,
             "values": confusion.tolist(),
         },
     }
+
+    feature_importance = _extract_feature_importance(classifier)
+    if feature_importance is not None:
+        evaluation["feature_importance"] = feature_importance
+
+    return evaluation
+
 
 
 def benchmark_models(features, labels, seed: int) -> tuple[dict[str, dict[str, object]], str]:
@@ -138,7 +208,7 @@ def benchmark_models(features, labels, seed: int) -> tuple[dict[str, dict[str, o
     )
 
     comparison: dict[str, dict[str, object]] = {}
-    best_model_name = "Random Forest"
+    best_model_name = "Gradient Boosting"
     best_macro_f1 = -1.0
 
     for model_name, model in build_candidates(seed).items():
@@ -149,6 +219,7 @@ def benchmark_models(features, labels, seed: int) -> tuple[dict[str, dict[str, o
             best_model_name = model_name
 
     return comparison, best_model_name
+
 
 
 def train_and_save_model(sample_count: int = 1200, seed: int = 2026) -> TrainingArtifacts:
@@ -176,6 +247,11 @@ def train_and_save_model(sample_count: int = 1200, seed: int = 2026) -> Training
             "sample_count": sample_count,
             "evaluation": evaluation,
             "comparison": comparison,
+            "dataset_quality": {
+                "class_distribution": dict(Counter(labels)),
+                "unique_block_sizes": sorted(dataset_frame["block_size_kb"].unique().tolist()),
+                "feature_columns": FEATURE_COLUMNS,
+            },
         },
         MODEL_PATH,
     )
@@ -187,14 +263,14 @@ if __name__ == "__main__":
     artifacts = train_and_save_model()
     artifact = joblib.load(artifacts.model_path)
     comparison = artifact.get("comparison", {})
-    model_name = artifact.get("model_name", "Random Forest")
+    model_name = artifact.get("model_name", "Gradient Boosting")
 
     print("model comparison (same holdout split)")
-    print(f"{'model':<24} {'accuracy':>10} {'macro_f1':>10} {'weighted_f1':>12}")
+    print(f"{'model':<36} {'accuracy':>10} {'macro_f1':>10} {'weighted_f1':>12}")
     for name, metrics in comparison.items():
         marker = "  <- selected" if name == model_name else ""
         print(
-            f"{name:<24} "
+            f"{name:<36} "
             f"{metrics['accuracy']:>10.4f} "
             f"{metrics['macro_f1']:>10.4f} "
             f"{metrics['weighted_f1']:>12.4f}{marker}"

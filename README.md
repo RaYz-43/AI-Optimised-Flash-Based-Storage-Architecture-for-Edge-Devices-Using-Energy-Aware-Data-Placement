@@ -1,204 +1,156 @@
 # AI-Optimised Flash Storage for Edge AI
 
-A simulation-based proof of concept showing how a trained machine learning model combined with energy-aware flash placement can improve latency, energy use, and throughput for edge AI devices.
+A simulation-based project showing how machine-learning-guided data placement can improve flash storage behavior for edge workloads.
 
-![Project preview](assets/project-preview.png)
-
-## Demo options
-
-- Terminal mode for quick verification
-- Streamlit web app for presentation and live demo
-- Live telemetry mode using short real-time process disk I/O capture
-
-## What This Project Is
-
-This project is a lightweight storage-systems simulator rather than a hardware benchmark. It models flash zones with different performance and energy characteristics, then compares:
-
+It compares:
 - **Baseline random placement**
-- **ML-guided workload-aware placement**
+- **ML-guided energy-aware placement**
 
-The optimisation path benchmarks multiple tabular classifiers and selects the best performer to predict the most suitable flash zone from workload features such as access frequency, write ratio, temporal reuse, and block size. A heuristic fallback remains in the backend so the simulator stays robust even if the saved model artifact is unavailable.
+with measurable impact on:
+- latency
+- energy per operation
+- throughput
+- wear cost
 
-## Why this project stands out
+---
 
-This project moves beyond a generic storage simulation by framing the problem around **edge AI workloads** such as video analytics, sensor fusion, and model caching.
+## Project scope (important)
 
-The goal is to show how workload-aware storage decisions can reduce latency, lower energy use, and improve throughput.
+This is a **storage simulation proof-of-concept**, not a physical NAND controller benchmark.
 
-## Project idea upgrade
+- Uses synthetic workload generation and optional live process I/O telemetry
+- Models three flash zones with different cost profiles
+- Evaluates policy quality through baseline vs optimized simulation outcomes
 
-For lecturers, recruiters, or GitHub visitors, position the project as a:
+---
 
-**Lightweight Edge-AI Storage Optimisation Simulator**
+## Current ML setup
 
-That tells a stronger story than just “flash architecture.” It shows:
+The training pipeline benchmarks **three required models** on the **same dataset** and **same hold-out split**:
 
-- systems thinking
-- applied machine learning
-- performance engineering
-- energy-efficiency awareness
-- practical experimentation
+1. Decision Tree
+2. Linear Regression (converted to classifier)
+3. Gradient Boosting
 
-## Current features
+Model selection rule:
+- Select the model with highest **Macro F1**
 
-- Synthetic benchmark workload generation for repeatable evaluation
-- Live telemetry mode using process-level disk I/O activity captured from the local machine
-- Zone-based flash model with different latency, energy, and wear profiles
-- Offline-trained placement model selected by benchmark comparison (currently Gradient Boosting)
-- Hidden heuristic fallback for robustness if the saved model is unavailable
-- Capacity-aware block placement
-- Capacity-aware overflow handling when workload demand exceeds physical flash capacity
-- Placement-aware scheduling bonuses for matched data-zone behavior
-- Baseline vs optimised comparison report
-- Saved training dataset and model artifact for reproducibility
-- Unit tests and GitHub Actions CI
-- Browser-based Streamlit demo for presentation
+Why Macro F1:
+- The zone classes are not perfectly balanced.
+- Macro F1 treats each class equally, so model quality is not dominated by a majority class.
 
-## Verified sample results
+### Current selected model
 
-Using the default synthetic benchmark setup, a representative run produced:
+With the latest trained artifact in this repo, the selected model is:
+- **Linear Regression (as classifier)**
 
-- **Latency reduction:** 12.21%
-- **Energy reduction:** 10.88%
-- **Wear-cost reduction:** 0.12%
-- **Throughput increase:** 13.90%
+(Selection may change if you retrain with different data/seed.)
 
-## Capacity model and workload size
+---
 
-The simulator models a fixed physical flash capacity of 250 blocks across three zones:
+## Key features
 
-- HOT_CACHE: 75 blocks
-- BALANCED: 105 blocks
-- COLD_DENSE: 70 blocks
+- Repeatable synthetic workload generation
+- Live telemetry mode (process-level disk I/O capture)
+- Capacity-aware zone placement with overflow handling
+- Baseline vs optimized comparison under identical workload input
+- Model benchmark table and selection by Macro F1
+- Confusion matrix and per-class metrics
+- Feature importance visualization (when supported by model)
+- Streamlit presentation UI
 
-In the web UI, you can run synthetic workloads up to 500 blocks. For runs above 250 blocks, the simulator now applies an explicit overflow pressure model instead of silently forcing all overflow into one zone. This keeps high-load experiments interpretable and avoids an artificial quality cliff immediately after the physical-capacity threshold.
+---
 
 ## Repository structure
 
-- [edge_ai_flash_project.py](edge_ai_flash_project.py) — main simulation script
-- [app.py](app.py) — Streamlit demo application
-- [ml/training.py](ml/training.py) — model training pipeline and artifact export
-- [ml/inference.py](ml/inference.py) — runtime model loading and zone prediction
-- [tests/test_edge_ai_flash_project.py](tests/test_edge_ai_flash_project.py) — unit tests
-- [.github/workflows/python-ci.yml](.github/workflows/python-ci.yml) — GitHub Actions CI
-- [.gitignore](.gitignore) — ignores Python cache and local environment files
-- [requirements.txt](requirements.txt) — Python dependencies for the demo app and live telemetry mode
-- [LICENSE](LICENSE) — MIT license
+- `edge_ai_flash_project.py` — simulation core
+- `app.py` — Streamlit demo app
+- `ml/training.py` — model training/benchmark pipeline
+- `ml/inference.py` — model loading + runtime inference
+- `ml/features.py` — feature engineering helpers
+- `tests/test_edge_ai_flash_project.py` — unit tests
+- `data/model.joblib` — trained model artifact
+- `data/training_workloads.csv` — generated training dataset
 
-## How to run
+---
 
-1. Install Python 3.10+
-2. Open the project folder
-3. Create or select a virtual environment
-4. Install dependencies
-5. Run the main script
+## Run guide (Windows)
+
+### 1) Install dependencies
 
 ```bash
-python -m pip install -r requirements.txt
-python edge_ai_flash_project.py
+py -3.13 -m pip install -r requirements.txt
 ```
 
-Expected result: a report comparing the baseline strategy with ML-guided placement.
-
-## ML pipeline
-
-The ML-backed placement flow is:
-
-1. Generate or capture workloads
-2. Extract workload features
-3. Predict the best flash zone with the highest-scoring benchmarked classifier
-4. Apply capacity-aware placement in the simulator
-5. Compare results against baseline random placement
-
-The trained model artifact is stored in `data/model.joblib`, and the generated labeled training dataset is stored in `data/training_workloads.csv`.
-
-The training artifact also stores hold-out evaluation metrics, including accuracy, macro precision, macro recall, macro F1, weighted F1, and a confusion matrix.
-
-### Model comparison (same hold-out split)
-
-The training pipeline benchmarks three candidate models on the same 80/20 hold-out split and selects the model with the highest **macro F1** (best balance across all classes, including minority classes).
-
-| Model | Accuracy | Macro F1 | Weighted F1 |
-|---|---:|---:|---:|
-| Logistic Regression | 0.8833 | 0.8596 | 0.8878 |
-| Random Forest | 0.9125 | 0.8722 | 0.9114 |
-| **Gradient Boosting (selected)** | **0.9292** | **0.8939** | **0.9272** |
-
-Why this winner: Gradient Boosting achieved the highest macro F1, so it provided the best class-balanced performance for this dataset.
-
-To regenerate the model and print the evaluation metrics:
+### 2) Train / refresh model artifact
 
 ```bash
-python -m ml.training
+py -3.13 -m ml.training
 ```
 
-## How to run the web demo
+### 3) Run terminal simulation
 
 ```bash
-python -m pip install -r requirements.txt
-streamlit run app.py
+py -3.13 edge_ai_flash_project.py
 ```
 
-The browser demo lets you switch between a controlled synthetic benchmark workload and a short live telemetry capture from the current machine. The presentation flow always uses the ML-backed placement engine.
-
-## Live telemetry mode
-
-The web demo supports a real-time capture mode. During a short capture window, it samples current process disk I/O counters and converts that activity into workload profiles for the simulator.
-
-This is more realistic than synthetic generation, but it is still **process-level telemetry**, not raw flash-controller logs or true block-level NAND tracing.
-
-Synthetic mode remains useful as a controlled benchmark source for repeatable demos, testing, and model training.
-
-Good activities for testing live mode:
-
-- opening large folders in File Explorer
-- copying files
-- launching applications
-- opening several browser tabs with heavy sites
-
-## How to test
+### 4) Run Streamlit demo app
 
 ```bash
-python -m unittest discover -s tests -v
+py -3.13 -m streamlit run app.py --server.port 8502
 ```
 
-All tests should pass before presenting or pushing changes.
+Open: `http://localhost:8502`
 
-## Presentation Summary
+> If 8502 is busy, use any free port.
 
-If you need one sentence for a demo:
+---
 
-> This project is a simulation-based proof of concept for ML-guided flash placement on edge devices, showing that workload-aware storage decisions can reduce latency and energy use while improving throughput.
+## What to show in poster/demo
 
-## Example project pitch
+Keep your presentation focused on these 3 visuals:
 
-> Edge devices increasingly run AI workloads, but their flash storage is often managed with generic strategies that ignore workload behavior. This project simulates an ML-optimised flash placement layer that extracts workload features and uses the best-performing benchmarked classifier to guide data placement across flash zones. The result is lower latency, reduced energy consumption, and better throughput for next-generation edge systems.
+1. **Baseline vs AI metrics** (latency, energy, throughput, wear)
+2. **Model Macro F1 comparison chart** (3 models)
+3. **Confusion matrix** of selected model
 
-## GitHub checklist
+And these 3 talking points:
 
-A strong beginner-friendly GitHub repo should include:
+- “Macro F1 is used because class balance matters.”
+- “All models are compared on the same split for fairness.”
+- “The selected model drives zone prediction in optimized placement.”
 
-- clear project title
-- problem statement
-- setup steps
-- test coverage
-- license
-- CI workflow
-- future roadmap
+---
 
-This repository includes the core pieces expected in a strong beginner-friendly research or portfolio project.
+## Evaluation outputs stored in model artifact
 
-## Suggested future upgrades
+`data/model.joblib` stores:
+- selected model name
+- full comparison results for all three models
+- hold-out metrics (accuracy, macro precision/recall/F1, weighted F1)
+- per-class performance
+- confusion matrix
+- classification report
+- feature importance (if available)
 
-If you want to push this further, add one or more of these:
+---
 
-1. **Captured-process table**: show the top live workloads during telemetry mode
-2. **Scenario presets**: healthcare edge AI, autonomous drones, smart city cameras
-3. **CLI arguments**: choose workload size, random seed, or capture duration
-4. **Results export**: save JSON or CSV reports for analysis
-5. **Charts**: add richer visual comparisons and trend history
-6. **Model selection expansion**: add XGBoost/LightGBM and cross-validation-based benchmarking
+## Testing
+
+```bash
+py -3.13 -m unittest discover -s tests -v
+```
+
+---
+
+## Notes on realism and limits
+
+- Live telemetry is process-level I/O activity, not hardware flash trace logs.
+- Simulation cost equations are simplified but consistent and useful for comparative evaluation.
+- Results should be presented as **relative improvement in simulation**, not absolute hardware guarantee.
+
+---
 
 ## License
 
-This project is released under the MIT License. See [LICENSE](LICENSE).
+MIT License. See `LICENSE`.
